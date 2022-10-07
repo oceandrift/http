@@ -1,0 +1,32 @@
+name "oceandrift-http"
+description "HTTP application server"
+
+copyright "Copyright © 2022  Elias Batek"
+license "MIT"
+
+authors "Elias Batek (0xEAB)"
+
+targetType "library"
+targetPath "bin"
+
+dependency ":message" version="*"
+subPackage {
+    name "message"
+    description "HTTP Message Abstraction"
+    targetPath "bin"
+    importPaths "message/"
+    sourcePaths "message/"
+}
+
+dependency ":server" version="*"
+subPackage {
+    name "server"
+    description "HTTP Server implementation (on top of vibe.d)"
+    targetPath "bin"
+    importPaths "server/"
+    sourcePaths "server/"
+    dependency "httparsed" version="~>1.2"
+    dependency "vibe-core" version="~>1.22"
+    dependency "oceandrift-http:message" version="*"
+}
+
