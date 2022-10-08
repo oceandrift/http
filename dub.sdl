@@ -21,7 +21,7 @@ subPackage {
 dependency ":server" version="*"
 subPackage {
     name "server"
-    description "HTTP Server implementation (on top of vibe.d)"
+    description "HTTP Server implementation (on top of vibe-core)"
     targetPath "bin"
     importPaths "server/"
     sourcePaths "server/"
@@ -29,4 +29,3 @@ subPackage {
     dependency "vibe-core" version="~>1.22"
     dependency "oceandrift-http:message" version="*"
 }
-
