@@ -7,14 +7,14 @@
     ---
     Copyright (c) 2014 PHP Framework Interoperability Group
 
-    Permission is hereby granted, free of charge, to any person obtaining a copy 
+    Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights 
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell 
-    copies of the Software, and to permit persons to whom the Software is 
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
     furnished to do so, subject to the following conditions:
 
-    The above copyright notice and this permission notice shall be included in 
+    The above copyright notice and this permission notice shall be included in
     all copies or substantial portions of the Software.
 
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -40,6 +40,35 @@ import std.uni : asLowerCase;
 
 @safe:
 
+/++
+    Case-insensitive ASCII-string comparision
+ +/
+bool equalCaseInsensitive(hstring a, hstring b) pure
+{
+    import std.ascii : toLower;
+
+    if (a.length != b.length)
+        return false;
+
+    foreach (size_t i, char c; a)
+        if (c != b[i])
+            if (c.toLower != b[i].toLower)
+                return false;
+
+    return true;
+}
+
+unittest
+{
+    assert(equalCaseInsensitive("a", "a"));
+    assert(equalCaseInsensitive("Oachkatzlschwoaf", "OACHKATZLSCHWOAF"));
+    assert(equalCaseInsensitive("asdf", "ASDF"));
+    assert(equalCaseInsensitive("Keep-Alive", "keep-alive"));
+    assert(equalCaseInsensitive("kEEp-aLIVe", "Keep-Alive"));
+    assert(equalCaseInsensitive("a", "a"));
+    assert(equalCaseInsensitive("a", "a"));
+}
+
 package(oceandrift.http) struct RequestTransformer
 {
 @safe pure nothrow:
@@ -52,6 +81,14 @@ package(oceandrift.http) struct RequestTransformer
     void reset()
     {
         _msg = Request.init;
+        this.setup();
+    }
+
+    void setup()
+    {
+        // Reserve capacity for a few headers.
+        // My browser (Firefox 105.0) appears to send less than 16 header lines usually.
+        _msg._headers.reserve(20);
     }
 
     Request getData()
@@ -79,34 +116,35 @@ package(oceandrift.http) struct RequestTransformer
         _msg._headers.append(name, value);
     }
 
-    void onStatus(int)
-    {
-        assert(0);
-    }
-
-    void onStatusMsg(const(char)[])
-    {
-        assert(0);
-    }
-
     void onBody(Body body_)
     {
         _msg._body = body_;
     }
 }
 
+/++
+    “HTTP message string” – short-hand for `const(char)[]``.
+
+    $(SIDEBAR
+        Not sure about the name.
+        Would have prefered *cstring* (*const string* as opposed to D’s default immutable one),
+        but the common association with that term would be “zero-terminated string (as made famous by C)”.
+    )
+ +/
 alias hstring = const(char)[];
 
+///
 struct Header
 {
-    private alias HeaderName_t = ReturnType!((hstring s) => s.asLowerCase);
+@safe pure nothrow @nogc:
 
-    /**
-        InputRange
-     */
-    HeaderName_t name;
-
+    hstring name;
     hstring[] values;
+
+    bool isSet() const
+    {
+        return (values.length > 0);
+    }
 }
 
 private struct Headers
@@ -118,12 +156,17 @@ private struct Headers
         Header[] _h;
     }
 
+    void reserve(size_t n)
+    {
+        this._h.reserve(n);
+    }
+
     void append(hstring name, hstring value)
     {
         // search for an existing entry
         foreach (ref header; _h)
         {
-            if (header.name.equal(name.asLowerCase))
+            if (header.name.asLowerCase.equal(name.asLowerCase))
             {
                 // found: append value
                 header.values ~= value;
@@ -132,14 +175,14 @@ private struct Headers
         }
 
         // new entry
-        _h ~= Header(name.asLowerCase, [value]);
+        _h ~= Header(name, [value]);
     }
 
     void set(hstring name, hstring[] values)
     {
         foreach (ref header; _h)
         {
-            if (header.name.equal(name.asLowerCase))
+            if (header.name.asLowerCase.equal(name.asLowerCase))
             {
                 // found: override value
                 header.values = values;
@@ -147,7 +190,7 @@ private struct Headers
             }
         }
 
-        _h ~= Header(name.asLowerCase, values);
+        _h ~= Header(name, values);
     }
 
     void set(hstring name, hstring value)
@@ -159,31 +202,26 @@ private struct Headers
     {
         import std.algorithm : remove;
 
-        this._h = this._h.remove!(h => h.name.equal(name.asLowerCase));
+        this._h = this._h.remove!(h => h.name.asLowerCase.equal(name.asLowerCase));
     }
 
 @nogc:
     bool opBinaryRight(string op : "in")(hstring name)
     {
         foreach (header; _h)
-            if (header.name.equal(name.asLowerCase))
+            if (header.name.asLowerCase.equal(name.asLowerCase))
                 return true;
 
         return false;
     }
 
-    bool has(hstring name)
-    {
-        return (name in this);
-    }
-
     Header opIndex(hstring name)
     {
         foreach (header; _h)
-            if (header.name.equal(name.asLowerCase))
+            if (header.name.asLowerCase.equal(name.asLowerCase))
                 return header;
 
-        assert(0, "Header not found");
+        return Header(name, []);
     }
 }
 
@@ -209,13 +247,14 @@ unittest
 struct Body
 {
     import std.array : appender, Appender;
+    import std.traits : isIntegral;
 
     private
     {
         Appender!(const(ubyte)[]) _data;
     }
 
-    const(ubyte)[] read() const
+    const(ubyte)[] data() const
     {
         return _data.data;
     }
@@ -239,6 +278,56 @@ struct Body
     {
         this.write(cast(const(ubyte)[]) data);
     }
+
+    void write(ubyte c)
+    {
+        _data.put([c]);
+    }
+
+    void write(char c)
+    {
+        this.write(cast(ubyte) c);
+    }
+
+    void write(Integer)(Integer i) if (isIntegral!Integer)
+    {
+        import std.conv : to;
+
+        this.write(i.to!string);
+    }
+
+    void write(Args...)(Args args)
+    {
+        import std.traits : isArray, Unqual;
+
+        static foreach (a; args)
+        {
+            {
+                alias T = Unqual!(typeof(a));
+                static if (isArray!T)
+                {
+                    {
+                        alias TE = Unqual!(typeof(a[0]));
+                        static if (is(TE == ubyte))
+                            this.write(a);
+                        else static if (is(TE == char))
+                            this.write(a);
+                        else
+                            static assert(0, "incompatible array type");
+                    }
+
+                }
+                else static if (is(T == ubyte))
+                    this.write(a);
+                else static if (is(T == char))
+                    this.write(a);
+                else static if (isIntegral!T)
+                    this.write(a);
+                else
+                    static assert(0, "Cannot write element of type `" ~ typeof(a).stringof ~ "`");
+            }
+        }
+    }
 }
 
 /**
@@ -253,12 +342,11 @@ struct Body
  * @link http://www.ietf.org/rfc/rfc7230.txt
  * @link http://www.ietf.org/rfc/rfc7231.txt
  */
-mixin template Message(TMessage)
+mixin template _Message(TMessage)
 {
     private
     {
         hstring _protocol;
-        hstring _method;
         Headers _headers;
         Body _body;
     }
@@ -433,7 +521,7 @@ mixin template Message(TMessage)
      *
      * @return StreamInterface Returns the body as a stream.
      */
-    ref Body getBody() return
+    ref Body body_() return
     {
         return _body;
     }
@@ -478,9 +566,9 @@ mixin template Message(TMessage)
  * be implemented such that they retain the internal state of the current
  * message and return an instance that contains the changed state.
  */
-mixin template GeneralRequest(TRequest)
+mixin template _Request(TRequest)
 {
-    mixin Message!TRequest;
+    mixin _Message!TRequest;
 
     private
     {
@@ -530,7 +618,7 @@ mixin template GeneralRequest(TRequest)
      *
      * @return string Returns the request method.
      */
-    hstring getMethod()
+    hstring method()
     {
         return _method;
     }
@@ -566,7 +654,7 @@ mixin template GeneralRequest(TRequest)
      * @return UriInterface Returns a UriInterface instance
      *     representing the URI of the request.
      */
-    hstring getUri()
+    hstring uri()
     {
         return _uri;
     }
@@ -647,9 +735,9 @@ mixin template GeneralRequest(TRequest)
  * be implemented such that they retain the internal state of the current
  * message and return an instance that contains the changed state.
  */
-mixin template ServerRequest(TRequest)
+mixin template _ServerRequest(TRequest)
 {
-    mixin GeneralRequest!TRequest;
+    mixin _Request!TRequest;
 
     /**
      * Retrieve server parameters.
@@ -869,12 +957,195 @@ mixin template ServerRequest(TRequest)
     TRequest withoutAttribute(hstring name);
 }
 
-struct Request
+/**
+ * Representation of an outgoing, server-side response.
+ *
+ * Per the HTTP specification, this interface includes properties for
+ * each of the following:
+ *
+ * - Protocol version
+ * - Status code and reason phrase
+ * - Headers
+ * - Message body
+ *
+ * Responses are considered immutable; all methods that might change state MUST
+ * be implemented such that they retain the internal state of the current
+ * message and return an instance that contains the changed state.
+ */
+mixin template _Response(TResponse)
 {
-    mixin ServerRequest!Request;
+    mixin _Message!TResponse;
+
+    private
+    {
+        int _statusCode = 200;
+        hstring _reasonPhrase = "OK";
+    }
+
+    /**
+     * Gets the response status code.
+     *
+     * The status code is a 3-digit integer result code of the server's attempt
+     * to understand and satisfy the request.
+     *
+     * @return int Status code.
+     */
+    int statusCode()
+    {
+        return _statusCode;
+    }
+
+    /**
+     * Return an instance with the specified status code and, optionally, reason phrase.
+     *
+     * If no reason phrase is specified, implementations MAY choose to default
+     * to the RFC 7231 or IANA recommended reason phrase for the response's
+     * status code.
+     *
+     * This method MUST be implemented in such a way as to retain the
+     * immutability of the message, and MUST return an instance that has the
+     * updated status and reason phrase.
+     *
+     * @link http://tools.ietf.org/html/rfc7231#section-6
+     * @link http://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+     * @param int $code The 3-digit integer result code to set.
+     * @param string $reasonPhrase The reason phrase to use with the
+     *     provided status code; if none is provided, implementations MAY
+     *     use the defaults as suggested in the HTTP specification.
+     * @return static
+     * @throws \InvalidArgumentException For invalid status code arguments.
+     */
+    TResponse withStatus(int code, hstring reasonPhrase = null)
+    {
+        TResponse r = this;
+        r._statusCode = code;
+        r._reasonPhrase = reasonPhrase;
+        return r;
+    }
+
+    /**
+     * Gets the response reason phrase associated with the status code.
+     *
+     * Because a reason phrase is not a required element in a response
+     * status line, the reason phrase value MAY be null. Implementations MAY
+     * choose to return the default RFC 7231 recommended reason phrase (or those
+     * listed in the IANA HTTP Status Code Registry) for the response's
+     * status code.
+     *
+     * @link http://tools.ietf.org/html/rfc7231#section-6
+     * @link http://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+     * @return string Reason phrase; must return an empty string if none present.
+     */
+    public hstring reasonPhrase()
+    {
+        return _reasonPhrase;
+    }
 }
 
+///
+struct Request
+{
+    mixin _ServerRequest!Request;
+}
+
+///
 struct Response
 {
-    mixin Message!Response;
+    mixin _Response!Response;
+}
+
+/// https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+enum string[int] reasonPhrase = [
+        100: "Continue", // [RFC9110, Section 15.2.1]
+        101: "Switching Protocols", // [RFC9110, Section 15.2.2]
+        102: "Processing", // [RFC2518]
+        103: "Early Hints", // [RFC8297]
+
+        200: "OK", // [RFC9110, Section 15.3.1]
+        201: "Created", // [RFC9110, Section 15.3.2]
+        202: "Accepted", // [RFC9110, Section 15.3.3]
+        203: "Non-Authoritative Information", // [RFC9110, Section 15.3.4]
+        204: "No Content", // [RFC9110, Section 15.3.5]
+        205: "Reset Content", // [RFC9110, Section 15.3.6]
+        206: "Partial Content", // [RFC9110, Section 15.3.7]
+        207: "Multi-Status", // [RFC4918]
+        208: "Already Reported", // [RFC5842]
+        226: "IM Used", // [RFC3229]
+
+        300: "Multiple Choices", // [RFC9110, Section 15.4.1]
+        301: "Moved Permanently", // [RFC9110, Section 15.4.2]
+        302: "Found", // [RFC9110, Section 15.4.3]
+        303: "See Other", // [RFC9110, Section 15.4.4]
+        304: "Not Modified", // [RFC9110, Section 15.4.5]
+        305: "Use Proxy", // [RFC9110, Section 15.4.6]
+        306: "(Unused)", // [RFC9110, Section 15.4.7]
+        307: "Temporary Redirect", // [RFC9110, Section 15.4.8]
+        308: "Permanent Redirect", // [RFC9110, Section 15.4.9]
+
+        400: "Bad Request", // [RFC9110, Section 15.5.1]
+        401: "Unauthorized", // [RFC9110, Section 15.5.2]
+        402: "Payment Required", // [RFC9110, Section 15.5.3]
+        403: "Forbidden", // [RFC9110, Section 15.5.4]
+        404: "Not Found", // [RFC9110, Section 15.5.5]
+        405: "Method Not Allowed", // [RFC9110, Section 15.5.6]
+        406: "Not Acceptable", // [RFC9110, Section 15.5.7]
+        407: "Proxy Authentication Required", // [RFC9110, Section 15.5.8]
+        408: "Request Timeout", // [RFC9110, Section 15.5.9]
+        409: "Conflict", // [RFC9110, Section 15.5.10]
+        410: "Gone", // [RFC9110, Section 15.5.11]
+        411: "Length Required", // [RFC9110, Section 15.5.12]
+        412: "Precondition Failed", // [RFC9110, Section 15.5.13]
+        413: "Content Too Large", // [RFC9110, Section 15.5.14]
+        414: "URI Too Long", // [RFC9110, Section 15.5.15]
+        415: "Unsupported Media Type", // [RFC9110, Section 15.5.16]
+        416: "Range Not Satisfiable", // [RFC9110, Section 15.5.17]
+        417: "Expectation Failed", // [RFC9110, Section 15.5.18]
+        418: "(Unused)", // [RFC9110, Section 15.5.19]
+        421: "Misdirected Request", // [RFC9110, Section 15.5.20]
+        422: "Unprocessable Content", // [RFC9110, Section 15.5.21]
+        423: "Locked", // [RFC4918]
+        424: "Failed Dependency", // [RFC4918]
+        425: "Too Early", // [RFC8470]
+        426: "Upgrade Required", // [RFC9110, Section 15.5.22]
+        428: "Precondition Required", // [RFC6585]
+        429: "Too Many Requests", // [RFC6585]
+        431: "Request Header Fields Too Large", // [RFC6585]
+        451: "Unavailable For Legal Reasons", // [RFC7725]
+
+        500: "Internal Server Error", // [RFC9110, Section 15.6.1]
+        501: "Not Implemented", // [RFC9110, Section 15.6.2]
+        502: "Bad Gateway", // [RFC9110, Section 15.6.3]
+        503: "Service Unavailable", // [RFC9110, Section 15.6.4]
+        504: "Gateway Timeout", // [RFC9110, Section 15.6.5]
+        505: "HTTP Version Not Supported", // [RFC9110, Section 15.6.6]
+        506: "Variant Also Negotiates", // [RFC2295]
+        507: "Insufficient Storage", // [RFC4918]
+        508: "Loop Detected", // [RFC5842]
+        510: "Not Extended (OBSOLETED)", // [RFC2774][status-change-http-experiments-to-historic]
+        511: "Network Authentication Required", // [RFC6585]
+    ];
+
+string getReasonPhrase(int status) pure nothrow @nogc
+{
+    switch (status)
+    {
+        static foreach (sc, rp; reasonPhrase)
+    case sc:
+            return rp;
+
+    default:
+        if (status <= 99)
+            return "Whatever";
+        if (status <= 199)
+            return "Informational";
+        if (status <= 299)
+            return "Successful";
+        if (status <= 399)
+            return "Redirection";
+        if (status <= 499)
+            return "Client error";
+        if (status < 599)
+            return "Server error responses";
+        return "Whatever";
+    }
 }
