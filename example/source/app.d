@@ -40,5 +40,5 @@ void main() @safe
         server.shutdown();
 
     // run application
-    run();
+    runApplication();
 }

@@ -129,11 +129,12 @@ Server boot(RequestHandler requestHandler) nothrow
     return Server(requestHandler);
 }
 
-///
-int run()
+public
 {
-    import vibe.core.core;
+    private import vibe.core.core;
 
-    logDiagnostic("oceandrift/http: run()");
-    return runApplication();
+    /++
+        Run the application (and eventloop)
+     +/
+    alias runApplication = vibe.core.core.runApplication;
 }
