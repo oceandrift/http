@@ -147,3 +147,30 @@ void sendResponse(TCPConnection connection, int status, string reasonPhrase)
     connection.write(CRLF);
     connection.flush();
 }
+
+bool isKeepAlive(scope Request request)
+{
+    enum kaValue = LowerCaseToken.makeConverted("keep-alive");
+
+    if (request.protocol == "HTTP/1.1")
+    {
+        if (!request.hasHeader!"Connection")
+            return true;
+
+        const hstring[] h = request.getHeader!"Connection";
+
+        foreach (value; h)
+            if (value.equalsCaseInsensitive(kaValue))
+                return true;
+    }
+    else if (request.protocol == "HTTP/1.0")
+    {
+        const hstring[] h = request.getHeader!"Connection";
+
+        foreach (value; h)
+            if (value.equalsCaseInsensitive(kaValue))
+                return true;
+    }
+
+    return false;
+}

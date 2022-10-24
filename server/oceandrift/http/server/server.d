@@ -51,11 +51,11 @@ struct Server
         try
         {
             connection.tcpNoDelay = true;
-            connection.readTimeout = dur!"seconds"(10);
+            connection.readTimeout = dur!"minutes"(3);
 
             while (!connection.empty)
             {
-                ubyte[256] buffer;
+                ubyte[1024 * 2] buffer;
                 Request request;
                 int parsed = -1;
 
@@ -79,12 +79,24 @@ struct Server
                     return;
                 }
 
+                const bool keepAlive = request.isKeepAlive;
+
                 Response response = _requestHandler(request, Response());
-                sendResponse(connection, response);
 
-                // TODO: Keep Alived
+                // dfmt off
+                response = (keepAlive)
+                    ? response.withHeader!"Connection"("keep-alive")
+                    : response.withHeader!"Connection"("close")
+                ;
+                // dfmt on
 
-                return;
+                try
+                    sendResponse(connection, response);
+                catch (Exception)
+                    return;
+
+                if (!keepAlive)
+                    return;
             }
         }
         catch (ReadTimeoutException ex)
