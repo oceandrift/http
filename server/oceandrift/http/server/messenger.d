@@ -112,6 +112,7 @@ void sendResponse(TCPConnection connection, Response response)
 {
     connection.write("HTTP/1.1 ");
     connection.write(response.statusCode.to!string);
+    connection.write(" ");
     connection.write(
         (response.reasonPhrase.length > 0)
             ? response.reasonPhrase
