@@ -34,16 +34,14 @@
 +/
 module oceandrift.http.message;
 
-import std.algorithm : equal;
 import std.traits : ReturnType;
-import std.uni : asLowerCase;
 
 @safe:
 
 /++
     Case-insensitive ASCII-string comparision
  +/
-bool equalCaseInsensitive(hstring a, hstring b) pure
+bool equalsCaseInsensitive(hstring a, hstring b) pure nothrow
 {
     import std.ascii : toLower;
 
@@ -56,17 +54,6 @@ bool equalCaseInsensitive(hstring a, hstring b) pure
                 return false;
 
     return true;
-}
-
-unittest
-{
-    assert(equalCaseInsensitive("a", "a"));
-    assert(equalCaseInsensitive("Oachkatzlschwoaf", "OACHKATZLSCHWOAF"));
-    assert(equalCaseInsensitive("asdf", "ASDF"));
-    assert(equalCaseInsensitive("Keep-Alive", "keep-alive"));
-    assert(equalCaseInsensitive("kEEp-aLIVe", "Keep-Alive"));
-    assert(equalCaseInsensitive("a", "a"));
-    assert(equalCaseInsensitive("a", "a"));
 }
 
 package(oceandrift.http) struct RequestTransformer
@@ -133,6 +120,133 @@ package(oceandrift.http) struct RequestTransformer
  +/
 alias hstring = const(char)[];
 
+/++
+    Lower-case HTTP token (tchar string)
+
+    See_Also:
+        https://www.rfc-editor.org/rfc/rfc9110#name-tokens
+ +/
+struct LowerCaseToken
+{
+@safe pure:
+
+    static class LCTException : Exception
+    {
+    @nogc @safe pure nothrow:
+        this(string msg, string file = __FILE__, size_t line = __LINE__)
+        {
+            super(msg, file, line);
+        }
+    }
+
+    private
+    {
+        const(char)[] _data;
+    }
+
+    @disable this();
+
+    private this(const(char)[] data) nothrow @nogc
+    {
+        _data = data;
+    }
+
+    hstring data() const nothrow @nogc
+    {
+        return _data;
+    }
+
+static:
+    ///
+    LowerCaseToken makeValidated(hstring input)
+    {
+        import std.ascii : isUpper;
+        import std.format;
+
+        foreach (size_t i, const char c; input)
+            if (!c.isTChar || c.isUpper)
+                throw new LCTException(format!"Invalid tchar(x%X) @%u"(c, i));
+
+        return LowerCaseToken(input);
+    }
+
+    ///
+    LowerCaseToken makeConverted(hstring input)
+    {
+        import std.ascii : toLower;
+        import std.format;
+
+        auto data = new char[](input.length);
+
+        foreach (size_t i, const char c; input)
+            if (c.isTChar)
+                data[i] = c.toLower;
+            else
+                throw new LCTException(format!"Invalid tchar(x%X) @%u"(c, i));
+
+        return LowerCaseToken(data);
+    }
+
+    ///
+    LowerCaseToken makeSanitized(hstring input) nothrow
+    {
+        import std.ascii : toLower;
+
+        auto data = new char[](input.length);
+
+        foreach (size_t i, const char c; input)
+            data[i] = (c.isTChar) ? c.toLower : '_';
+
+        return LowerCaseToken(data);
+    }
+
+    ///
+    LowerCaseToken makeAsIs(hstring input) nothrow @nogc
+    in
+    {
+        import std.ascii : isUpper;
+
+        foreach (size_t i, const char c; input)
+            assert((c.isTChar && c.isUpper), "Invalid tchar encountered");
+    }
+    do
+    {
+        return LowerCaseToken(input);
+    }
+}
+
+bool equalsCaseInsensitive(const hstring a, const LowerCaseToken b) pure nothrow @nogc
+{
+    import std.ascii : toLower;
+
+    if (a.length != b.data.length)
+        return false;
+
+    foreach (size_t i, const char c; b.data)
+        if (c != a[i])
+            if (c != a[i].toLower)
+                return false;
+
+    return true;
+}
+
+unittest
+{
+    import std.exception;
+
+    assertNotThrown(LowerCaseToken.makeValidated("asdf"));
+    assertThrown(LowerCaseToken.makeValidated("ASDF"));
+    assertThrown(LowerCaseToken.makeValidated("{asdf}"));
+    assertThrown(LowerCaseToken.makeValidated("A-a"));
+    assertNotThrown(LowerCaseToken.makeValidated("as-df"));
+
+    assert(LowerCaseToken.makeSanitized("asdf").data == "asdf");
+    assert(LowerCaseToken.makeSanitized("ASDF").data == "asdf");
+    assert(LowerCaseToken.makeSanitized("{asdf}").data == "_asdf_");
+    assert(LowerCaseToken.makeSanitized("A-a").data == "a-a");
+    assert(LowerCaseToken.makeSanitized("as-df").data == "as-df");
+}
+
 ///
 struct Header
 {
@@ -161,12 +275,29 @@ private struct Headers
         this._h.reserve(n);
     }
 
+    void append(LowerCaseToken name, hstring value)
+    {
+        // search for an existing entry
+        foreach (ref header; _h)
+        {
+            if (header.name.equalsCaseInsensitive(name))
+            {
+                // found: append value
+                header.values ~= value;
+                return;
+            }
+        }
+
+        // new entry
+        _h ~= Header(name.data, [value]);
+    }
+
     void append(hstring name, hstring value)
     {
         // search for an existing entry
         foreach (ref header; _h)
         {
-            if (header.name.asLowerCase.equal(name.asLowerCase))
+            if (header.name.equalsCaseInsensitive(name))
             {
                 // found: append value
                 header.values ~= value;
@@ -178,11 +309,11 @@ private struct Headers
         _h ~= Header(name, [value]);
     }
 
-    void set(hstring name, hstring[] values)
+    void set(LowerCaseToken name, hstring[] values)
     {
         foreach (ref header; _h)
         {
-            if (header.name.asLowerCase.equal(name.asLowerCase))
+            if (header.name.equalsCaseInsensitive(name))
             {
                 // found: override value
                 header.values = values;
@@ -190,38 +321,38 @@ private struct Headers
             }
         }
 
-        _h ~= Header(name, values);
+        _h ~= Header(name.data, values);
     }
 
-    void set(hstring name, hstring value)
+    void set(LowerCaseToken name, hstring value)
     {
         this.set(name, [value]);
     }
 
-    void remove(hstring name)
+    void remove(LowerCaseToken name)
     {
         import std.algorithm : remove;
 
-        this._h = this._h.remove!(h => h.name.asLowerCase.equal(name.asLowerCase));
+        this._h = this._h.remove!(h => h.name.equalsCaseInsensitive(name));
     }
 
 @nogc:
-    bool opBinaryRight(string op : "in")(hstring name)
+    bool opBinaryRight(string op : "in")(LowerCaseToken name)
     {
         foreach (header; _h)
-            if (header.name.asLowerCase.equal(name.asLowerCase))
+            if (header.name.equalsCaseInsensitive(name))
                 return true;
 
         return false;
     }
 
-    Header opIndex(hstring name)
+    Header opIndex(LowerCaseToken name)
     {
         foreach (header; _h)
-            if (header.name.asLowerCase.equal(name.asLowerCase))
+            if (header.name.equalsCaseInsensitive(name))
                 return header;
 
-        return Header(name, []);
+        return Header(name.data, []);
     }
 }
 
@@ -232,16 +363,19 @@ unittest
     headers.append("X-Anything", "asdf");
     headers.append("X-anything", "jklö");
 
-    assert("Host" in headers);
-    assert("host" in headers);
-    assert(headers["Host"].values == ["www.dlang.org"]);
+    assert(LowerCaseToken.makeConverted("Host") in headers);
+    assert(LowerCaseToken.makeConverted("host") in headers);
+    assert(
+        headers[LowerCaseToken.makeConverted("Host")].values
+            == ["www.dlang.org"]
+    );
 
-    assert("x-Anything" in headers);
-    assert(headers["x-anything"].values[0] == "asdf");
-    assert(headers["x-anything"].values[1] == "jklö");
+    assert(LowerCaseToken.makeConverted("x-Anything") in headers);
+    assert(headers[LowerCaseToken.makeConverted("x-anything")].values[0] == "asdf");
+    assert(headers[LowerCaseToken.makeConverted("x-anything")].values[1] == "jklö");
 
-    headers.remove("host");
-    assert("Host" !in headers);
+    headers.remove(LowerCaseToken.makeConverted("host"));
+    assert(LowerCaseToken.makeConverted("Host") !in headers);
 }
 
 struct Body
@@ -421,9 +555,15 @@ mixin template _Message(TMessage)
      *     name using a case-insensitive string comparison. Returns false if
      *     no matching header name is found in the message.
      */
-    bool hasHeader(hstring name)
+    bool hasHeader(LowerCaseToken name)
     {
         return (name in _headers);
+    }
+
+    bool hasHeader(hstring name)()
+    {
+        enum token = LowerCaseToken.makeConverted(name);
+        return this.hasHeader(token);
     }
 
     /**
@@ -440,9 +580,15 @@ mixin template _Message(TMessage)
      *    header. If the header does not appear in the message, this method MUST
      *    return an empty array.
      */
-    hstring[] getHeader(hstring name)
+    hstring[] getHeader(LowerCaseToken name)
     {
         return _headers[name].values;
+    }
+
+    hstring[] getHeader(hstring name)()
+    {
+        enum token = LowerCaseToken.makeConverted(name);
+        return this.getHeader(token);
     }
 
     /**
@@ -460,14 +606,20 @@ mixin template _Message(TMessage)
      * @return static
      * @throws \InvalidArgumentException for invalid header names or values.
      */
-    TMessage withHeader(hstring name, hstring value)
+    TMessage withHeader(LowerCaseToken name, hstring value)
     {
         TMessage m = this;
         m._headers.set(name, value);
         return m;
     }
 
-    TMessage withHeader(hstring name, hstring[] values)
+    TMessage withHeader(hstring name)(hstring value)
+    {
+        enum token = LowerCaseToken.makeConverted(name);
+        return this.withHeader(token, value);
+    }
+
+    TMessage withHeader(LowerCaseToken name, hstring[] values)
     {
         TMessage m = this;
         m._headers.set(name, values);
@@ -509,7 +661,7 @@ mixin template _Message(TMessage)
      * @param string $name Case-insensitive header field name to remove.
      * @return static
      */
-    TMessage withoutHeader(hstring name)
+    TMessage withoutHeader(LowerCaseToken name)
     {
         TMessage m = this;
         m._headers.remove(name);
@@ -1148,4 +1300,32 @@ string getReasonPhrase(int status) pure nothrow @nogc
             return "Server error responses";
         return "Whatever";
     }
+}
+
+bool isTChar(const char c) pure nothrow @nogc
+{
+    import std.ascii : isGraphical;
+
+    if (!c.isGraphical)
+        return false;
+
+    // Delimiters are chosen from the set of US-ASCII visual characters not allowed in a token (DQUOTE and "(),/:;<=>?@[\]{}").
+
+    // dfmt off
+        if (
+                (c == 34)               // '"'
+            ||  (c == 40)               // '('
+            ||  (c == 41)               // ')'
+            ||  (c == 44)               // ','
+            ||  (c == 47)               // '/'
+            || ((c >= 58) && (c <= 64)) // 58 == ':', 59 == ';', 60 == '<', 61 == '=', 62 == '>', 63 == '?', 64 == '@'
+            || ((c >= 91) && (c <= 93)) // 91 == '[', 92 == '\', 93 == ']'
+            ||  (c == 123)              // '{'
+            ||  (c == 125)              // '}'
+        ) {
+            return false;
+        }
+        // dfmt on
+
+    return true;
 }

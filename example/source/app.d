@@ -27,8 +27,8 @@ void main() @safe
 
         // return response with “content-type” + “server” headers
         return response
-            .withHeader("content-type", "text/plain; charset=UTF-8")
-            .withHeader("server", "oceandrift/http");
+            .withHeader!"Content-Type"("text/plain; charset=UTF-8")
+            .withHeader!"Server"("oceandrift/http");
     });
 
     // listen on port 8080

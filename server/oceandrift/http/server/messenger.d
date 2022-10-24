@@ -48,23 +48,23 @@ int parseRequest(TCPConnection connection, ubyte[] defaultBuffer, out Request re
             if (status == statusPartial)
             {
                 if (buffer.length >= 16_384)
-                    throw new Exception("Request too big.");
+                    throw new Exception("Request headers too big.");
 
-                buffer.length += 1024;
+                buffer.length += buffer.length;
             }
             else if (status >= 0)
                 break;
             else
-                return -status;
+                return status;
         }
     }
 
     request = parser.getData();
     auto reqBody = Body();
 
-    if (!request.hasHeader("content-length"))
+    if (!request.hasHeader!"Content-Length")
     {
-        if (request.hasHeader("transfer-encoding"))
+        if (request.hasHeader!"Transfer-Encoding")
             return 501;
 
         // empty body
@@ -73,7 +73,7 @@ int parseRequest(TCPConnection connection, ubyte[] defaultBuffer, out Request re
 
     buffer = buffer[headerParserLastPos .. $];
 
-    hstring[] headerContentLength = request.getHeader("content-length");
+    hstring[] headerContentLength = request.getHeader!"Content-Length"();
     if (headerContentLength.length > 1)
         return 400; // am I supposed to guess which one’s correct, huh?!
 
@@ -129,7 +129,7 @@ void sendResponse(TCPConnection connection, Response response)
             connection.write(CRLF);
         }
     }
-    connection.write("Content-Length: ");
+    connection.write("content-length: ");
     connection.write(response.body_.data.length.to!string);
     connection.write(CRLF);
 
