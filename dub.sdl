@@ -29,3 +29,13 @@ subPackage {
     dependency "vibe-core" version="~>1.22"
     dependency "oceandrift-http:message" version="*"
 }
+
+dependency ":microframework" version="*"
+subPackage {
+    name "microframework"
+    description "Micro web framework"
+    targetPath "bin"
+    importPaths "microframework/"
+    sourcePaths "microframework/"
+    dependency "oceandrift-http:server" version="*"
+}

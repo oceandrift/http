@@ -1,7 +1,7 @@
 {
-	"name": "oceandrift-http-example",
+	"name": "oceandrift-http-server-example",
     "targetPath": "bin",
     "dependencies": {
-        "oceandrift-http": {"path": "../"}
+        "oceandrift-http:server": {"path": "../../"}
     }
 }

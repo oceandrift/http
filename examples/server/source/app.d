@@ -7,7 +7,7 @@ int main() @safe
     Server server = boot(delegate(Request request, Response response) {
         //logInfo("%s", request);
 
-        if (request.uri == "/favicon.ico")
+        if (request.uri != "/")
             return response.withStatus(404);
 
         // let’s respond
