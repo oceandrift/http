@@ -14,7 +14,7 @@ import vibe.core.stream;
  +/
 alias RequestHandler = Response delegate(Request request, Response response) @safe;
 
-struct Server
+class Server
 {
 @safe:
     private
@@ -22,8 +22,6 @@ struct Server
         TCPListener[] _listeners;
         RequestHandler _requestHandler;
     }
-
-    @disable this();
 
     public this(RequestHandler requestHandler) nothrow pure @nogc
     {
@@ -58,12 +56,17 @@ struct Server
 
             while (!connection.empty)
             {
-                ubyte[1024 * 2] buffer;
+                // The stack buffer breaks @safe-ty guarantees.
+                // It would need `scope` which in it’s current state isn’t too handy
+                // (→ “attribute soup”, “cannot take address […] indirection” on `const header = request.getHeader!"abc"();` …).
+                //ubyte[1024 * 2] buffer;
+
                 Request request;
                 int parsed = -1;
 
                 try
-                    parsed = parseRequest(connection, buffer, request);
+                    //parsed = parseRequest(connection, buffer, request);
+                    parsed = parseRequest(connection, request);
                 catch (Exception)
                     return;
 
@@ -82,7 +85,7 @@ struct Server
                     return;
                 }
 
-                const bool keepAlive = request.isKeepAlive;
+                immutable bool keepAlive = request.isKeepAlive;
 
                 Response response = _requestHandler(request, Response());
 
@@ -129,7 +132,7 @@ struct Server
 ///
 Server boot(RequestHandler requestHandler) nothrow
 {
-    return Server(requestHandler);
+    return new Server(requestHandler);
 }
 
 public

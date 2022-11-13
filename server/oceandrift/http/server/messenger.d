@@ -1,3 +1,11 @@
+/++
+    HTTP request parsing and response sending functionality
+
+    $(NOTE
+        While code in this module is mostly `public` (so you can happily use it to hack cool things together!)
+        it’s rather to be considered an implementation detail and subject to potentially breaking changes.
+    )
+ +/
 module oceandrift.http.server.messenger;
 
 import oceandrift.http.message;
@@ -10,18 +18,19 @@ import vibe.core.stream;
 
 enum CRLF = "\r\n";
 enum CRLFCRLF = CRLF ~ CRLF;
+enum requestInitialBufferSize = 2 * 1024;
 enum requestMaxBodySize = (1024 ^^ 2) * 16;
 
 pragma(msg, "Max request body size: " ~ requestMaxBodySize.to!string);
 
 /// Returns: 0 on success
-int parseRequest(TCPConnection connection, ubyte[] defaultBuffer, out Request request)
+int parseRequest(TCPConnection connection, out Request request) //int parseRequest(TCPConnection connection, ubyte[] defaultBuffer, out Request request)
 {
     import httparsed;
 
     enum statusPartial = -1 * ParserError.partial;
 
-    ubyte[] buffer = defaultBuffer;
+    ubyte[] buffer = new ubyte[](requestInitialBufferSize);
 
     auto parser = initParser!RequestTransformer();
     parser.setup();
