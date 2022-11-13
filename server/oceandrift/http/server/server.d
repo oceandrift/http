@@ -9,7 +9,10 @@ import vibe.core.stream;
 
 @safe:
 
-alias RequestHandler = Response delegate(scope Request request, scope Response response) @safe;
+/++
+    Request Handler function signature
+ +/
+alias RequestHandler = Response delegate(Request request, Response response) @safe;
 
 struct Server
 {

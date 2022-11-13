@@ -2,9 +2,9 @@ import oceandrift.http.message;
 import oceandrift.http.server.server;
 import vibe.core.log;
 
-void main() @safe
+int main() @safe
 {
-    Server server = boot(delegate(scope Request request, scope Response response) {
+    Server server = boot(delegate(Request request, Response response) {
         //logInfo("%s", request);
 
         if (request.uri == "/favicon.ico")
@@ -40,5 +40,5 @@ void main() @safe
         server.shutdown();
 
     // run application
-    runApplication();
+    return runApplication();
 }

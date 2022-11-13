@@ -2,7 +2,7 @@
     HTTP Message abstraction
 
     This work is a derivative work based on “PSR-7: HTTP message interfaces”.
-    It features siginificant changes and is not compatible with the original.
+    It features significant changes and is not compatible with the original.
 
     ---
     Copyright (c) 2014 PHP Framework Interoperability Group
@@ -321,6 +321,7 @@ private struct Headers
             }
         }
 
+        // new entry
         _h ~= Header(name.data, values);
     }
 
@@ -333,7 +334,7 @@ private struct Headers
     {
         import std.algorithm : remove;
 
-        this._h = this._h.remove!(h => h.name.equalsCaseInsensitive(name));
+        _h = _h.remove!(h => h.name.equalsCaseInsensitive(name))();
     }
 
 @nogc:

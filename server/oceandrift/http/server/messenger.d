@@ -149,7 +149,7 @@ void sendResponse(TCPConnection connection, int status, string reasonPhrase)
     connection.flush();
 }
 
-bool isKeepAlive(scope Request request)
+bool isKeepAlive(Request request)
 {
     enum kaValue = LowerCaseToken.makeConverted("keep-alive");
 
