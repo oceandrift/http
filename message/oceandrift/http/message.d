@@ -956,7 +956,7 @@ enum string[int] reasonPhrase = [
         415: "Unsupported Media Type", // [RFC9110, Section 15.5.16]
         416: "Range Not Satisfiable", // [RFC9110, Section 15.5.17]
         417: "Expectation Failed", // [RFC9110, Section 15.5.18]
-        418: "(Unused)", // [RFC9110, Section 15.5.19]
+        418: "I'm a teapot", // [RFC9110, Section 15.5.19] [see also: RFC2324]
         421: "Misdirected Request", // [RFC9110, Section 15.5.20]
         422: "Unprocessable Content", // [RFC9110, Section 15.5.21]
         423: "Locked", // [RFC4918]
@@ -977,7 +977,7 @@ enum string[int] reasonPhrase = [
         506: "Variant Also Negotiates", // [RFC2295]
         507: "Insufficient Storage", // [RFC4918]
         508: "Loop Detected", // [RFC5842]
-        510: "Not Extended (OBSOLETED)", // [RFC2774][status-change-http-experiments-to-historic]
+        510: "Not Extended", // [RFC2774][status-change-http-experiments-to-historic]
         511: "Network Authentication Required", // [RFC6585]
     ];
 
@@ -1001,7 +1001,7 @@ string getReasonPhrase(int status) pure nothrow @nogc
         if (status <= 499)
             return "Client error";
         if (status < 599)
-            return "Server error responses";
+            return "Server error";
         return "Whatever";
     }
 }
