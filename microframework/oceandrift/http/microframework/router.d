@@ -80,9 +80,9 @@ private void addRouteTreeNode(RouteTreeNode* tree, string url, RequestHandler re
             || (component == "")
             || (tree.wildcard.component == "")
             ,
-            "Ambiguously named wildcard route component: "
+            "Ambiguously named route placeholder: `"
                 ~ component
-                ~ " (already knowns as: " ~ tree.wildcard.component ~ ")"
+                ~ "` (already knowns as: `" ~ tree.wildcard.component ~ "`)"
         );
         // dfmt on
 
@@ -123,7 +123,8 @@ private void addRouteTreeNode(RouteTreeNode* tree, string url, RequestHandler re
             {
                 auto replacementNode = new RouteTreeNode(requestHandler, [
                         RouteTreeLink(branch.component[shorter.length .. $], branch.node) // link to existing node
-                    ]);
+                    ]
+                );
 
                 branch.component = branch.component[0 .. shorter.length];
                 branch.node = replacementNode;
@@ -301,4 +302,66 @@ unittest
     routerRoot.addRoute("/foo/:var", rh0);
     assert(routerRoot.branches[2].node.wildcard.node.branches[0].node.requestHandler == rh2);
     assert(routerRoot.branches[2].node.wildcard.node.requestHandler == rh0);
+
+    routerRoot.addRoute("/abc", rh0);
+    assert(routerRoot.branches[3].component == "abc");
+    assert(routerRoot.branches[3].node.requestHandler == rh0);
+    routerRoot.addRoute("/abc/def", rh1);
+    assert(routerRoot.branches[3].component == "abc");
+    assert(routerRoot.branches[3].node.branches.length == 1);
+    assert(routerRoot.branches[3].node.branches[0].component == "/def");
+    assert(routerRoot.branches[3].node.branches[0].node.requestHandler == rh1);
+    routerRoot.addRoute("/abc/", rh2);
+    assert(routerRoot.branches[3].node.branches.length == 1);
+    assert(routerRoot.branches[3].node.branches[0].component == "/");
+    assert(routerRoot.branches[3].node.branches[0].node.requestHandler == rh2);
+    assert(routerRoot.branches[3].node.branches[0].node.branches.length == 1);
+    assert(routerRoot.branches[3].node.branches[0].node.branches[0].node.requestHandler == rh1);
+    assert(routerRoot.branches[3].node.branches[0].node.branches[0].component == "def");
+    routerRoot.addRoute("/abc/ghi", rh3);
+    assert(routerRoot.branches[3].node.branches[0].node.branches.length == 2);
+    assert(routerRoot.branches[3].node.branches[0].node.branches[0].node.requestHandler == rh1);
+    assert(routerRoot.branches[3].node.branches[0].node.branches[0].component == "def");
+    assert(routerRoot.branches[3].node.branches[0].node.branches[1].node.requestHandler == rh3);
+    assert(routerRoot.branches[3].node.branches[0].node.branches[1].component == "ghi");
+    routerRoot.addRoute("/abc/jkl", rh0);
+    assert(routerRoot.branches[3].node.branches[0].node.branches.length == 3);
+    assert(routerRoot.branches[3].node.branches[0].node.branches[0].node.requestHandler == rh1);
+    assert(routerRoot.branches[3].node.branches[0].node.branches[0].component == "def");
+    assert(routerRoot.branches[3].node.branches[0].node.branches[1].node.requestHandler == rh3);
+    assert(routerRoot.branches[3].node.branches[0].node.branches[1].component == "ghi");
+    assert(routerRoot.branches[3].node.branches[0].node.branches[2].node.requestHandler == rh0);
+    assert(routerRoot.branches[3].node.branches[0].node.branches[2].component == "jkl");
+
+    assert(routerRoot.branches[3].node.branches[0].node.branches[0].node.branches.length == 0);
+    routerRoot.addRoute("/abc/def/mno", rh3);
+    assert(routerRoot.branches[3].node.branches[0].node.branches[0].component == "def");
+    assert(routerRoot.branches[3].node.branches[0].node.branches[0].node.requestHandler == rh1);
+    assert(routerRoot.branches[3].node.branches[0].node.branches[0].node.branches.length == 1);
+    assert(
+        routerRoot.branches[3].node.branches[0].node.branches[0].node
+            .branches[0].node.requestHandler == rh3
+    );
+    assert(
+        routerRoot.branches[3].node.branches[0].node.branches[0].node.branches[0].component == "/mno"
+    );
+}
+
+@system unittest
+{
+    import std.exception : assertThrown;
+
+    RequestHandler rh0 = delegate(Request, Response r) { return r; };
+    auto routerRoot = new RouteTreeNode();
+
+    assertThrown!Error(routerRoot.addRoute(":id/", rh0));
+
+    routerRoot.addRoute("/:foo", rh0);
+    assertThrown!Error(routerRoot.addRoute("/:bar", rh0));
+
+    routerRoot.addRoute("/a/:foo/x", rh0);
+    assertThrown!Error(routerRoot.addRoute("/a/:bar/y", rh0));
+
+    routerRoot.addRoute("/2000", rh0);
+    assertThrown!Error(routerRoot.addRoute("/2000", rh0));
 }
