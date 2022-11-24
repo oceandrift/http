@@ -1,6 +1,7 @@
-module oceandrift.http.microframework.router;
+module oceandrift.http.microframework.routetree;
 
-import oceandrift.http.message;
+import std.string : indexOf;
+import oceandrift.http.message : hstring;
 import oceandrift.http.server : RequestHandler;
 
 @safe:
@@ -27,8 +28,6 @@ in (url[0] == '/')
 
 private void addRouteTreeNode(RouteTreeNode* tree, string url, RequestHandler requestHandler)
 {
-    import std.string : indexOf;
-
     if (url.length == 0)
     {
         assert(tree.requestHandler is null, "Duplicate route");
@@ -168,6 +167,8 @@ private void addRouteTreeNode(RouteTreeNode* tree, string url, RequestHandler re
 
 unittest
 {
+    import oceandrift.http.message;
+
     // dfmt off
     RequestHandler rh0 = delegate(Request, Response r) { return r; };
     RequestHandler rh1 = delegate(Request, Response r) { return r.withStatus(201); };
@@ -350,6 +351,7 @@ unittest
 @system unittest
 {
     import std.exception : assertThrown;
+    import oceandrift.http.message;
 
     RequestHandler rh0 = delegate(Request, Response r) { return r; };
     auto routerRoot = new RouteTreeNode();
@@ -364,4 +366,85 @@ unittest
 
     routerRoot.addRoute("/2000", rh0);
     assertThrown!Error(routerRoot.addRoute("/2000", rh0));
+}
+
+RequestHandler match(RouteTreeNode* root, hstring url)
+{
+    if (url[0] != '/')
+        return null;
+
+    return matchRoute(root, url[1 .. $]);
+}
+
+private RequestHandler matchRoute(RouteTreeNode* tree, hstring url)
+{
+    if (url.length == 0)
+        return tree.requestHandler;
+
+    foreach (branch; tree.branches)
+    {
+        if (branch.component.length > url.length) // branch can’t match
+            continue;
+
+        if (branch.component != url[0 .. branch.component.length]) // mismatch
+            continue;
+
+        return matchRoute(branch.node, url[branch.component.length .. $]);
+    }
+
+    if (tree.wildcard.node !is null)
+    {
+        immutable endOfWildcard = url.indexOf('/');
+        if (endOfWildcard < 0)
+            return matchRoute(tree.wildcard.node, "");
+
+        return matchRoute(tree.wildcard.node, url[endOfWildcard .. $]);
+    }
+
+    return null;
+}
+
+unittest
+{
+    import oceandrift.http.message;
+
+    // dfmt off
+    RequestHandler rhRoot = delegate(Request, Response r) { return r; };
+    RequestHandler rhHello = delegate(Request, Response r) { return r; };
+    RequestHandler rhHelloWorld = delegate(Request, Response r) { return r; };
+    RequestHandler rhHel = delegate(Request, Response r) { return r; };
+    RequestHandler rhItems = delegate(Request, Response r) { return r; };
+    RequestHandler rhItems2 = delegate(Request, Response r) { return r; };
+    RequestHandler rhItemN = delegate(Request, Response r) { return r; };
+    RequestHandler rhItemNOwner = delegate(Request, Response r) { return r; };
+    // dfmt on
+
+    auto routerRoot = new RouteTreeNode(rhRoot);
+
+    routerRoot.addRoute("/hello", rhHello);
+    routerRoot.addRoute("/hello/world", rhHelloWorld);
+    routerRoot.addRoute("/hel", rhHel);
+    routerRoot.addRoute("/items", rhItems);
+    routerRoot.addRoute("/items/", rhItems2);
+    routerRoot.addRoute("/items/:id", rhItemN);
+    routerRoot.addRoute("/items/:id/owner", rhItemNOwner);
+
+    assert(routerRoot.match("/hello/world") == rhHelloWorld);
+    assert(routerRoot.match("/hello/world") != rhHello);
+    assert(routerRoot.match("/hello") == rhHello);
+    assert(routerRoot.match("/heyo") is null);
+    assert(routerRoot.match("/hel") == rhHel);
+
+    assert(routerRoot.match("/items") == rhItems);
+    assert(routerRoot.match("/items/") == rhItems2);
+    assert(routerRoot.match("/items1") is null);
+
+    assert(routerRoot.match("/items/0001") == rhItemN);
+    assert(routerRoot.match("/items/0002") == rhItemN);
+    assert(routerRoot.match("/items/mayonnaise") == rhItemN);
+    assert(routerRoot.match("/items/mayonnaise/instrument") is null);
+    assert(routerRoot.match("/items/mayonnaise/owner") == rhItemNOwner);
+    assert(routerRoot.match("/items/xyz/owner") == rhItemNOwner);
+
+    assert(routerRoot.match("/") == rhRoot);
 }
