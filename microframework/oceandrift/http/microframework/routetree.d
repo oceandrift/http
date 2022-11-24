@@ -1,3 +1,31 @@
+/++
+    Route tree implementation
+
+    This module implements a simple tree-structure for storing routes.
+
+    $(NOTE
+        If you just want to use the framework and aren’t looking forward to work on the routing implementation (or your own),
+        feel free to skip reading this module’s documentation.
+    )
+
+    This tree is built using [RouteTreeNode] nodes connected via [RouteTreeLink]s.
+    The URL is composed through “components” along the [RouteTreeLinks].
+
+    The tree is built upon a “root” node.
+    Nodes are added by calling [addRoute] and passing along the root node, the target URL and a request handler.
+    URLs are specified as absolute locations starting with a slash (`/`).
+
+    Routing is straightforward as well:
+    Call [match] to get the request handler registered for the provided URL.
+
+    Supports $(B route placeholders) (“variables”).
+    They start with a colon (`:`) and are terminated with a slash (`/`); the slash ends up as part of the URL.
+    When a route is supposed to end with a placeholder, omit the trailling slash (`/`).
+
+    $(TIP
+        Route placeholders are called $(B wildcards) internally.
+    )
+ +/
 module oceandrift.http.microframework.routetree;
 
 import std.string : indexOf;
@@ -6,12 +34,14 @@ import oceandrift.http.server : RequestHandler;
 
 @safe:
 
+///
 struct RouteTreeLink
 {
     string component = null;
     RouteTreeNode* node;
 }
 
+///
 struct RouteTreeNode
 {
     RequestHandler requestHandler = null;
@@ -20,6 +50,7 @@ struct RouteTreeNode
     RouteTreeLink wildcard;
 }
 
+///
 void addRoute(RouteTreeNode* root, string url, RequestHandler requestHandler)
 in (url[0] == '/')
 {
@@ -368,6 +399,7 @@ unittest
     assertThrown!Error(routerRoot.addRoute("/2000", rh0));
 }
 
+///
 RequestHandler match(RouteTreeNode* root, hstring url)
 {
     if (url[0] != '/')
@@ -378,20 +410,23 @@ RequestHandler match(RouteTreeNode* root, hstring url)
 
 private RequestHandler matchRoute(RouteTreeNode* tree, hstring url)
 {
+    // direct match?
     if (url.length == 0)
         return tree.requestHandler;
 
+    // matching branches?
     foreach (branch; tree.branches)
     {
         if (branch.component.length > url.length) // branch can’t match
             continue;
 
-        if (branch.component != url[0 .. branch.component.length]) // mismatch
+        if (branch.component != url[0 .. branch.component.length]) // branch mismatches
             continue;
 
         return matchRoute(branch.node, url[branch.component.length .. $]);
     }
 
+    // wildcard match?
     if (tree.wildcard.node !is null)
     {
         immutable endOfWildcard = url.indexOf('/');
@@ -401,6 +436,7 @@ private RequestHandler matchRoute(RouteTreeNode* tree, hstring url)
         return matchRoute(tree.wildcard.node, url[endOfWildcard .. $]);
     }
 
+    // no match
     return null;
 }
 
@@ -447,4 +483,5 @@ unittest
     assert(routerRoot.match("/items/xyz/owner") == rhItemNOwner);
 
     assert(routerRoot.match("/") == rhRoot);
+    assert(routerRoot.match("oachkatzlschwoaf") is null);
 }
