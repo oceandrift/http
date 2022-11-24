@@ -89,7 +89,7 @@ private void addRouteTreeNode(RouteTreeNode* tree, string url, RequestHandler re
             return addRouteTreeNode(tree.wildcard.node, url[endOfWildcard .. $], requestHandler);
         }
 
-        // exists (no insert)
+        // exists (no direct insert)
 
         string component;
 
@@ -376,6 +376,22 @@ unittest
     );
     assert(
         routerRoot.branches[3].node.branches[0].node.branches[0].node.branches[0].component == "/mno"
+    );
+
+    routerRoot.addRoute("/:1/:2", rh0);
+    assert(routerRoot.wildcard.node !is null);
+    assert(routerRoot.wildcard.component == "1");
+    assert(routerRoot.wildcard.node.branches[0].component == "/");
+    assert(routerRoot.wildcard.node.branches[0].node.wildcard.node !is null);
+    assert(routerRoot.wildcard.node.branches[0].node.wildcard.component == "2");
+    assert(routerRoot.wildcard.node.branches[0].node.wildcard.node.requestHandler == rh0);
+    routerRoot.addRoute("/:1/:2/gulaschsuppm", rh1);
+    assert(
+        routerRoot.wildcard.node.branches[0].node.wildcard.node.branches[0].component == "/gulaschsuppm"
+    );
+    assert(
+        routerRoot.wildcard.node.branches[0].node.wildcard.node.branches[0]
+            .node.requestHandler == rh1
     );
 }
 
