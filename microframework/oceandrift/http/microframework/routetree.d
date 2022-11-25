@@ -415,16 +415,35 @@ unittest
     assertThrown!Error(routerRoot.addRoute("/2000", rh0));
 }
 
-///
-RequestHandler match(RouteTreeNode* root, hstring url)
+struct WildcardMatch
 {
-    if (url[0] != '/')
-        return null;
-
-    return matchRoute(root, url[1 .. $]);
+    string name;
+    hstring value;
 }
 
-private RequestHandler matchRoute(RouteTreeNode* tree, hstring url)
+struct RouteMatchMeta
+{
+    WildcardMatch[] wildcards;
+}
+
+struct RouteMatchResult
+{
+    RequestHandler requestHandler;
+    RouteMatchMeta meta;
+}
+
+///
+RouteMatchResult match(RouteTreeNode* root, hstring url)
+{
+    if (url[0] != '/')
+        return RouteMatchResult(null);
+
+    RouteMatchResult output;
+    output.requestHandler = matchRoute(root, url[1 .. $], output.meta);
+    return output;
+}
+
+private RequestHandler matchRoute(RouteTreeNode* tree, hstring url, ref RouteMatchMeta routeMatchMeta)
 {
     // direct match?
     if (url.length == 0)
@@ -439,17 +458,19 @@ private RequestHandler matchRoute(RouteTreeNode* tree, hstring url)
         if (branch.component != url[0 .. branch.component.length]) // branch mismatches
             continue;
 
-        return matchRoute(branch.node, url[branch.component.length .. $]);
+        return matchRoute(branch.node, url[branch.component.length .. $], routeMatchMeta);
     }
 
     // wildcard match?
     if (tree.wildcard.node !is null)
     {
-        immutable endOfWildcard = url.indexOf('/');
-        if (endOfWildcard < 0)
-            return matchRoute(tree.wildcard.node, "");
+        ptrdiff_t endOfWildcard = url.indexOf('/');
 
-        return matchRoute(tree.wildcard.node, url[endOfWildcard .. $]);
+        if (endOfWildcard < 0)
+            endOfWildcard = url.length;
+
+        routeMatchMeta.wildcards ~= WildcardMatch(tree.wildcard.component, url[0 .. endOfWildcard]);
+        return matchRoute(tree.wildcard.node, url[endOfWildcard .. $], routeMatchMeta);
     }
 
     // no match
@@ -469,6 +490,8 @@ unittest
     RequestHandler rhItems2 = delegate(Request, Response r) { return r; };
     RequestHandler rhItemN = delegate(Request, Response r) { return r; };
     RequestHandler rhItemNOwner = delegate(Request, Response r) { return r; };
+    RequestHandler rhItemNOwnerPetN = delegate(Request, Response r) { return r; };
+    RequestHandler rhVisitors = delegate(Request, Response r) { return r; };
     // dfmt on
 
     auto routerRoot = new RouteTreeNode(rhRoot);
@@ -480,24 +503,52 @@ unittest
     routerRoot.addRoute("/items/", rhItems2);
     routerRoot.addRoute("/items/:id", rhItemN);
     routerRoot.addRoute("/items/:id/owner", rhItemNOwner);
+    routerRoot.addRoute("/items/:id/owner/pets/:petID", rhItemNOwnerPetN);
+    routerRoot.addRoute("/events/:year/:month/:day/:event-name/visitors", rhVisitors);
 
-    assert(routerRoot.match("/hello/world") == rhHelloWorld);
-    assert(routerRoot.match("/hello/world") != rhHello);
-    assert(routerRoot.match("/hello") == rhHello);
-    assert(routerRoot.match("/heyo") is null);
-    assert(routerRoot.match("/hel") == rhHel);
+    assert(routerRoot.match("/hello/world").requestHandler == rhHelloWorld);
+    assert(routerRoot.match("/hello/world").requestHandler != rhHello);
+    assert(routerRoot.match("/hello").requestHandler == rhHello);
+    assert(routerRoot.match("/heyo").requestHandler is null);
+    assert(routerRoot.match("/hel").requestHandler == rhHel);
 
-    assert(routerRoot.match("/items") == rhItems);
-    assert(routerRoot.match("/items/") == rhItems2);
-    assert(routerRoot.match("/items1") is null);
+    assert(routerRoot.match("/items").requestHandler == rhItems);
+    assert(routerRoot.match("/items/").requestHandler == rhItems2);
+    assert(routerRoot.match("/items1").requestHandler is null);
 
-    assert(routerRoot.match("/items/0001") == rhItemN);
-    assert(routerRoot.match("/items/0002") == rhItemN);
-    assert(routerRoot.match("/items/mayonnaise") == rhItemN);
-    assert(routerRoot.match("/items/mayonnaise/instrument") is null);
-    assert(routerRoot.match("/items/mayonnaise/owner") == rhItemNOwner);
-    assert(routerRoot.match("/items/xyz/owner") == rhItemNOwner);
+    assert(routerRoot.match("/items/0001").requestHandler == rhItemN);
+    assert(routerRoot.match("/items/0002").requestHandler == rhItemN);
+    assert(routerRoot.match("/items/mayonnaise").requestHandler == rhItemN);
+    assert(routerRoot.match("/items/mayonnaise/instrument").requestHandler is null);
+    assert(routerRoot.match("/items/mayonnaise/owner").requestHandler == rhItemNOwner);
+    assert(routerRoot.match("/items/xyz/owner").requestHandler == rhItemNOwner);
+    assert(routerRoot.match("/items/xyz/owner/pets").requestHandler is null);
+    assert(routerRoot.match("/items/xyz/owner/pets/").requestHandler is null);
+    assert(routerRoot.match("/items/xyz/owner/pets/1").requestHandler == rhItemNOwnerPetN);
+    assert(
+        routerRoot.match("/events/:year/:month/:day/:event-name/visitors")
+            .requestHandler == rhVisitors);
 
-    assert(routerRoot.match("/") == rhRoot);
-    assert(routerRoot.match("oachkatzlschwoaf") is null);
+    assert(routerRoot.match("/").requestHandler == rhRoot);
+    assert(routerRoot.match("oachkatzlschwoaf").requestHandler is null);
+
+    assert(routerRoot.match("/items/0001").meta.wildcards
+            == [WildcardMatch("id", "0001")]);
+    assert(routerRoot.match("/items/0002").meta.wildcards
+            == [WildcardMatch("id", "0002")]);
+    assert(routerRoot.match("/items/thingy/owner/pets/1")
+            .meta.wildcards == [
+                WildcardMatch("id", "thingy"),
+                WildcardMatch("petID", "1"),
+            ]
+    );
+    assert(
+        routerRoot.match("/events/2022/12/31/New%20Year%E2%80%99s%20Eve/visitors")
+            .meta.wildcards == [
+                WildcardMatch("year", "2022"),
+                WildcardMatch("month", "12"),
+                WildcardMatch("day", "31"),
+                WildcardMatch("event-name", "New%20Year%E2%80%99s%20Eve"),
+            ]
+    );
 }
