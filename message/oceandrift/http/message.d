@@ -1,35 +1,12 @@
 /++
-    HTTP Message abstraction
+    HTTP Message abstraction and representation
 
-    This work is a derivative work based on “PSR-7: HTTP message interfaces”.
-    It features significant changes and is not compatible with the original.
-
-    ---
-    Copyright (c) 2014 PHP Framework Interoperability Group
-
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files (the "Software"), to deal
-    in the Software without restriction, including without limitation the rights
-    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-    copies of the Software, and to permit persons to whom the Software is
-    furnished to do so, subject to the following conditions:
-
-    The above copyright notice and this permission notice shall be included in
-    all copies or substantial portions of the Software.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-    THE SOFTWARE.
-    ---
+    This module’s design was inspired by “PSR-7: HTTP message interfaces”
+    created by the PHP Framework Interoperability Group.
 
     See_Also:
     $(LIST
         * https://www.php-fig.org/psr/psr-7/
-        * https://github.com/php-fig/http-message
     )
 +/
 module oceandrift.http.message;
@@ -488,54 +465,43 @@ struct Body
     }
 }
 
-/**
- * HTTP messages consist of requests from a client to a server and responses
- * from a server to a client. This interface defines the methods common to
- * each.
- *
- * Messages are considered immutable; all methods that might change state MUST
- * be implemented such that they retain the internal state of the current
- * message and return an instance that contains the changed state.
- *
- * @link http://www.ietf.org/rfc/rfc7230.txt
- * @link http://www.ietf.org/rfc/rfc7231.txt
- */
+/++
+    Representation of common parts of HTTP requests and responses
+
+    Standards:
+        $(LIST
+            * http://www.ietf.org/rfc/rfc7230.txt
+            * http://www.ietf.org/rfc/rfc7231.txt
+        )
++/
 mixin template _Message(TMessage)
 {
 @safe pure nothrow:
 
     private
     {
-        hstring _protocol;
+        hstring _protocol = "1.1";
         Headers _headers;
         Body _body;
     }
 
-    /**
-     * Retrieves the HTTP protocol version as a string.
-     *
-     * The string MUST contain only the HTTP version number (e.g., "1.1", "1.0").
-     *
-     * @return string HTTP protocol version.
-     */
+    /++
+        Used HTTP protocol version
+
+        Returns:
+            The protocol version as a string, e.g. "1.1" or "1.0"
+     +/
     hstring protocol() const
     {
         return _protocol;
     }
 
-    /**
-     * Return an instance with the specified HTTP protocol version.
-     *
-     * The version string MUST contain only the HTTP version number (e.g.,
-     * "1.1", "1.0").
-     *
-     * This method MUST be implemented in such a way as to retain the
-     * immutability of the message, and MUST return an instance that has the
-     * new protocol version.
-     *
-     * @param string $version HTTP protocol version
-     * @return static
-     */
+    /++
+        Sets the protocol version
+
+        Returns:
+            A new Message with the updated property
+     +/
     TMessage withProtocol(hstring protocol)
     {
         TMessage m = this;
@@ -543,95 +509,70 @@ mixin template _Message(TMessage)
         return this;
     }
 
-    /**
-     * Retrieves all message header values.
-     *
-     * The keys represent the header name as it will be sent over the wire, and
-     * each value is an array of strings associated with the header.
-     *
-     *     // Represent the headers as a string
-     *     foreach ($message->getHeaders() as $name => $values) {
-     *         echo $name . ": " . implode(", ", $values);
-     *     }
-     *
-     *     // Emit headers iteratively:
-     *     foreach ($message->getHeaders() as $name => $values) {
-     *         foreach ($values as $value) {
-     *             header(sprintf('%s: %s', $name, $value), false);
-     *         }
-     *     }
-     *
-     * While header names are not case-sensitive, getHeaders() will preserve the
-     * exact case in which headers were originally specified.
-     *
-     * @return string[][] Returns an associative array of the message's headers. Each
-     *     key MUST be a header name, and each value MUST be an array of strings
-     *     for that header.
-     */
+    /++
+        Retrieves all headers of the message
+     +/
     Header[] headers()
     {
         return this._headers._h;
     }
 
-    /**
-     * Checks if a header exists by the given case-insensitive name.
-     *
-     * @param string $name Case-insensitive header field name.
-     * @return bool Returns true if any header names match the given header
-     *     name using a case-insensitive string comparison. Returns false if
-     *     no matching header name is found in the message.
-     */
+    /++
+        Determines whether a header exists by the given name.
+
+        ---
+        if (requestOrResponse.hasHeader!"Content-Type") {
+            // …
+        }
+        ---
+     +/
     bool hasHeader(LowerCaseToken name)
     {
         return (name in _headers);
     }
 
+    /// ditto
     bool hasHeader(hstring name)()
     {
         enum token = LowerCaseToken.makeConverted(name);
         return this.hasHeader(token);
     }
 
-    /**
-     * Retrieves a message header value by the given case-insensitive name.
-     *
-     * This method returns an array of all the header values of the given
-     * case-insensitive header name.
-     *
-     * If the header does not appear in the message, this method MUST return an
-     * empty array.
-     *
-     * @param string $name Case-insensitive header field name.
-     * @return string[] An array of string values as provided for the given
-     *    header. If the header does not appear in the message, this method MUST
-     *    return an empty array.
-     */
+    /++
+        Retrieve a specific header’s values by the given name
+        ---
+        hstring[] accept = requestOrResponse.getHeader!"Accept";
+        ---
+     +/
     hstring[] getHeader(LowerCaseToken name)
     {
         return _headers[name].values;
     }
 
+    /// ditto
     hstring[] getHeader(hstring name)()
     {
         enum token = LowerCaseToken.makeConverted(name);
         return this.getHeader(token);
     }
 
-    /**
-     * Return an instance with the provided value replacing the specified header.
-     *
-     * While header names are case-insensitive, the casing of the header will
-     * be preserved by this function, and returned from getHeaders().
-     *
-     * This method MUST be implemented in such a way as to retain the
-     * immutability of the message, and MUST return an instance that has the
-     * new and/or updated header and value.
-     *
-     * @param string $name Case-insensitive header field name.
-     * @param string|string[] $value Header value(s).
-     * @return static
-     * @throws \InvalidArgumentException for invalid header names or values.
-     */
+    /++
+        Sets the header with the specified name to the specified value(s)
+
+        Returns:
+            A new Message with the updated property
+
+        ---
+        // single value
+        response = response.withHeader!"Content-Type"("text/plain");
+
+        // multiple values
+        response = response.withHeader!"Access-Control-Allow-Headers"(["content-type", "authorization"]);
+        ---
+
+        See_Also:
+            [withAddedHeader]
+     +/
     TMessage withHeader(LowerCaseToken name, hstring value)
     {
         TMessage m = this;
@@ -639,12 +580,14 @@ mixin template _Message(TMessage)
         return m;
     }
 
+    /// ditto
     TMessage withHeader(hstring name)(hstring value)
     {
         enum token = LowerCaseToken.makeConverted(name);
         return this.withHeader(token, value);
     }
 
+    /// ditto
     TMessage withHeader(LowerCaseToken name, hstring[] values)
     {
         TMessage m = this;
@@ -652,41 +595,55 @@ mixin template _Message(TMessage)
         return m;
     }
 
-    /**
-     * Return an instance with the specified header appended with the given value.
-     *
-     * Existing values for the specified header will be maintained. The new
-     * value(s) will be appended to the existing list. If the header did not
-     * exist previously, it will be added.
-     *
-     * This method MUST be implemented in such a way as to retain the
-     * immutability of the message, and MUST return an instance that has the
-     * new header and/or value.
-     *
-     * @param string $name Case-insensitive header field name to add.
-     * @param string|string[] $value Header value(s).
-     * @return static
-     * @throws \InvalidArgumentException for invalid header names or values.
-     */
-    TMessage withAddedHeader(hstring name, hstring value)
+    /// ditto
+    TMessage withHeader(hstring name)(hstring[] values)
+    {
+        enum token = LowerCaseToken.makeConverted(name);
+        return this.withHeader(token, values);
+    }
+
+    /++
+        Appends the given value to the specified header
+
+        Returns:
+            A new Message with the updated property
+
+        ---
+        response = response.withHeader!"Cache-Control"("no-cache"); // overrides existing any values
+
+        response = response.withAddedHeader!"Cache-Control"("no-store"); // appends the new value
+
+        response = response.withAddedHeader!"Cache-Control"([
+            "private",
+            "must-revalidate",
+        ]); // appends the new values
+        ---
+     +/
+    TMessage withAddedHeader(LowerCaseToken name, hstring value)
     {
         TMessage m = this;
         m._headers.append(name, value);
         return m;
     }
 
-    /**
-     * Return an instance without the specified header.
-     *
-     * Header resolution MUST be done without case-sensitivity.
-     *
-     * This method MUST be implemented in such a way as to retain the
-     * immutability of the message, and MUST return an instance that removes
-     * the named header.
-     *
-     * @param string $name Case-insensitive header field name to remove.
-     * @return static
-     */
+    /// ditto
+    TMessage withAddedHeader(hstring name)(hstring value)
+    {
+        enum token = LowerCaseToken.makeConverted(name);
+        return this.withAddedHeader(token, value);
+    }
+
+    /++
+        Removes the specified header from a message
+
+        Returns:
+            A new Message with the updated property
+
+        ---
+        // e.g. remove cookies from the response
+        response = response.withoutHeader!"Set-Cookie"();
+        ---
+     +/
     TMessage withoutHeader(LowerCaseToken name)
     {
         TMessage m = this;
@@ -694,29 +651,27 @@ mixin template _Message(TMessage)
         return m;
     }
 
-    /**
-     * Gets the body of the message.
-     *
-     * @return StreamInterface Returns the body as a stream.
-     */
+    /// ditto
+    TMessage withoutHeader(hstring name)()
+    {
+        enum token = LowerCaseToken.makeConverted(name);
+        return this.withoutHeader(token);
+    }
+
+    /++
+        Gets the body of the message
+     +/
     ref Body body_() return
     {
         return _body;
     }
 
-    /**
-     * Return an instance with the specified message body.
-     *
-     * The body MUST be a StreamInterface object.
-     *
-     * This method MUST be implemented in such a way as to retain the
-     * immutability of the message, and MUST return a new instance that has the
-     * new body stream.
-     *
-     * @param StreamInterface $body Body.
-     * @return static
-     * @throws \InvalidArgumentException When the body is not valid.
-     */
+    /++
+        Replaces the body of a message
+
+        Returns:
+            A new Message with the updated property
+     +/
     TMessage withBody(Body body_)
     {
         TMessage m = this;
@@ -725,25 +680,9 @@ mixin template _Message(TMessage)
     }
 }
 
-/**
- * Representation of an outgoing, client-side request.
- *
- * Per the HTTP specification, this interface includes properties for
- * each of the following:
- *
- * - Protocol version
- * - HTTP method
- * - URI
- * - Headers
- * - Message body
- *
- * During construction, implementations MUST attempt to set the Host header from
- * a provided URI if no Host header is provided.
- *
- * Requests are considered immutable; all methods that might change state MUST
- * be implemented such that they retain the internal state of the current
- * message and return an instance that contains the changed state.
- */
+/++
+    Representation of an HTTP request
+ +/
 mixin template _Request(TRequest)
 {
 @safe pure nothrow:
@@ -756,31 +695,20 @@ mixin template _Request(TRequest)
         hstring _uri;
     }
 
-    /**
-     * Retrieves the HTTP method of the request.
-     *
-     * @return string Returns the request method.
-     */
+    /++
+        Request method
+
+        Returns:
+            The request method as a string (e.g. "GET", "POST", "HEAD")
+     +/
     hstring method() const
     {
         return _method;
     }
 
-    /**
-     * Return an instance with the provided HTTP method.
-     *
-     * While HTTP method names are typically all uppercase characters, HTTP
-     * method names are case-sensitive and thus implementations SHOULD NOT
-     * modify the given string.
-     *
-     * This method MUST be implemented in such a way as to retain the
-     * immutability of the message, and MUST return an instance that has the
-     * changed request method.
-     *
-     * @param string $method Case-sensitive method.
-     * @return static
-     * @throws \InvalidArgumentException for invalid HTTP methods.
-     */
+    /++
+        Replaces the request method of the request
+     +/
     TRequest withMethod(hstring method)
     {
         TRequest r = this;
@@ -788,50 +716,27 @@ mixin template _Request(TRequest)
         return r;
     }
 
-    /**
-     * Retrieves the URI instance.
-     *
-     * This method MUST return a UriInterface instance.
-     *
-     * @link http://tools.ietf.org/html/rfc3986#section-4.3
-     * @return UriInterface Returns a UriInterface instance
-     *     representing the URI of the request.
-     */
+    /++
+        Request URI
+
+        Path + Query string (no host, no protocol),
+        e.g. "/hello-world?foo=bar"
+     +/
     hstring uri() const
     {
         return _uri;
     }
 
-    /**
-     * Returns an instance with the provided URI.
-     *
-     * This method MUST update the Host header of the returned request by
-     * default if the URI contains a host component. If the URI does not
-     * contain a host component, any pre-existing Host header MUST be carried
-     * over to the returned request.
-     *
-     * You can opt-in to preserving the original state of the Host header by
-     * setting `$preserveHost` to `true`. When `$preserveHost` is set to
-     * `true`, this method interacts with the Host header in the following ways:
-     *
-     * - If the Host header is missing or empty, and the new URI contains
-     *   a host component, this method MUST update the Host header in the returned
-     *   request.
-     * - If the Host header is missing or empty, and the new URI does not contain a
-     *   host component, this method MUST NOT update the Host header in the returned
-     *   request.
-     * - If a Host header is present and non-empty, this method MUST NOT update
-     *   the Host header in the returned request.
-     *
-     * This method MUST be implemented in such a way as to retain the
-     * immutability of the message, and MUST return an instance that has the
-     * new UriInterface instance.
-     *
-     * @link http://tools.ietf.org/html/rfc3986#section-4.3
-     * @param UriInterface $uri New request URI to use.
-     * @param bool $preserveHost Preserve the original state of the Host header.
-     * @return static
-     */
+    /++
+        Sets the URI of the request
+
+        Returns:
+            A new Request with the updated property
+
+        ---
+        request = request.withUri("/new-uri");
+        ---
+     +/
     TRequest withUri(hstring uri)
     {
         TRequest r = this;
@@ -840,21 +745,9 @@ mixin template _Request(TRequest)
     }
 }
 
-/**
- * Representation of an outgoing, server-side response.
- *
- * Per the HTTP specification, this interface includes properties for
- * each of the following:
- *
- * - Protocol version
- * - Status code and reason phrase
- * - Headers
- * - Message body
- *
- * Responses are considered immutable; all methods that might change state MUST
- * be implemented such that they retain the internal state of the current
- * message and return an instance that contains the changed state.
- */
+/++
+    Representation of an HTTP response
+ +/
 mixin template _Response(TResponse)
 {
 @safe pure nothrow:
@@ -867,39 +760,27 @@ mixin template _Response(TResponse)
         hstring _reasonPhrase = "OK";
     }
 
-    /**
-     * Gets the response status code.
-     *
-     * The status code is a 3-digit integer result code of the server's attempt
-     * to understand and satisfy the request.
-     *
-     * @return int Status code.
-     */
+    /++
+        HTTP response status code
+     +/
     int statusCode() const
     {
         return _statusCode;
     }
 
-    /**
-     * Return an instance with the specified status code and, optionally, reason phrase.
-     *
-     * If no reason phrase is specified, implementations MAY choose to default
-     * to the RFC 7231 or IANA recommended reason phrase for the response's
-     * status code.
-     *
-     * This method MUST be implemented in such a way as to retain the
-     * immutability of the message, and MUST return an instance that has the
-     * updated status and reason phrase.
-     *
-     * @link http://tools.ietf.org/html/rfc7231#section-6
-     * @link http://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-     * @param int $code The 3-digit integer result code to set.
-     * @param string $reasonPhrase The reason phrase to use with the
-     *     provided status code; if none is provided, implementations MAY
-     *     use the defaults as suggested in the HTTP specification.
-     * @return static
-     * @throws \InvalidArgumentException For invalid status code arguments.
-     */
+    /++
+        Sets the response’s HTTP status code
+
+        Returns:
+            A new Response with the updated property
+
+        ---
+        response = response.withStatus(404);
+
+        // optionally with a custom reason-phrase
+        response = response.withStatus(404, "Not Found");
+        ---
+     +/
     TResponse withStatus(int code, hstring reasonPhrase = null)
     {
         TResponse r = this;
@@ -908,32 +789,28 @@ mixin template _Response(TResponse)
         return r;
     }
 
-    /**
-     * Gets the response reason phrase associated with the status code.
-     *
-     * Because a reason phrase is not a required element in a response
-     * status line, the reason phrase value MAY be null. Implementations MAY
-     * choose to return the default RFC 7231 recommended reason phrase (or those
-     * listed in the IANA HTTP Status Code Registry) for the response's
-     * status code.
-     *
-     * @link http://tools.ietf.org/html/rfc7231#section-6
-     * @link http://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
-     * @return string Reason phrase; must return an empty string if none present.
-     */
+    /++
+        Reason phrase of the response
+
+        Might not be set (i.e. null)
+     +/
     public hstring reasonPhrase()
     {
         return _reasonPhrase;
     }
 }
 
-///
+/++
+    HTTP request representation
+ +/
 struct Request
 {
     mixin _Request!Request;
 }
 
-///
+/++
+    HTTP response representation
+ +/
 struct Response
 {
     mixin _Response!Response;

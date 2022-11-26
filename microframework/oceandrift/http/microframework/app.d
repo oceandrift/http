@@ -28,7 +28,7 @@ alias RouterConfigDelegate = void delegate(Router router) @safe;
 /++
     Straightforward microframework app bootstrapper
     
-    Call this function to start-up your oceandrift/http microframework app in a convient way.
+    Call this function to start-up your oceandrift/http microframework app in a convenient way.
 
     ---
     import oceandrift.http.microframework.app;
