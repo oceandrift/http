@@ -22,7 +22,7 @@
  +/
 module oceandrift.http.microframework.uri;
 
-import oceandrift.http.message : hstring;
+public import oceandrift.http.message : hstring;
 
 @safe pure:
 

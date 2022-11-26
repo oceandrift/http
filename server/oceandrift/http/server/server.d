@@ -14,7 +14,7 @@ import vibe.core.stream;
  +/
 alias RequestHandler = Response delegate(Request request, Response response) @safe;
 
-class Server
+final class Server
 {
 @safe:
     private
