@@ -30,6 +30,7 @@ module oceandrift.http.microframework.routetree;
 
 import std.string : indexOf;
 import oceandrift.http.message : hstring, Request, Response;
+import oceandrift.http.microframework.kvp;
 
 @safe:
 
@@ -423,15 +424,9 @@ unittest
     assertThrown!Error(routerRoot.addRoute("/2000", rh0));
 }
 
-struct WildcardMatch
-{
-    string name;
-    hstring value;
-}
-
 struct RouteMatchMeta
 {
-    WildcardMatch[] wildcards;
+    KeyValuePair[] placeholders;
 }
 
 struct RouteMatchResult
@@ -477,7 +472,7 @@ private RoutedRequestHandler matchRoute(RouteTreeNode* tree, hstring url, ref Ro
         if (endOfWildcard < 0)
             endOfWildcard = url.length;
 
-        routeMatchMeta.wildcards ~= WildcardMatch(tree.wildcard.component, url[0 .. endOfWildcard]);
+        routeMatchMeta.placeholders ~= KeyValuePair(tree.wildcard.component, url[0 .. endOfWildcard]);
         return matchRoute(tree.wildcard.node, url[endOfWildcard .. $], routeMatchMeta);
     }
 
@@ -540,23 +535,23 @@ unittest
     assert(routerRoot.match("/").requestHandler == rhRoot);
     assert(routerRoot.match("oachkatzlschwoaf").requestHandler is null);
 
-    assert(routerRoot.match("/items/0001").meta.wildcards
-            == [WildcardMatch("id", "0001")]);
-    assert(routerRoot.match("/items/0002").meta.wildcards
-            == [WildcardMatch("id", "0002")]);
+    assert(routerRoot.match("/items/0001").meta.placeholders
+            == [KeyValuePair("id", "0001")]);
+    assert(routerRoot.match("/items/0002").meta.placeholders
+            == [KeyValuePair("id", "0002")]);
     assert(routerRoot.match("/items/thingy/owner/pets/1")
-            .meta.wildcards == [
-                WildcardMatch("id", "thingy"),
-                WildcardMatch("petID", "1"),
+            .meta.placeholders == [
+                KeyValuePair("id", "thingy"),
+                KeyValuePair("petID", "1"),
             ]
     );
     assert(
         routerRoot.match("/events/2022/12/31/New%20Year%E2%80%99s%20Eve/visitors")
-            .meta.wildcards == [
-                WildcardMatch("year", "2022"),
-                WildcardMatch("month", "12"),
-                WildcardMatch("day", "31"),
-                WildcardMatch("event-name", "New%20Year%E2%80%99s%20Eve"),
+            .meta.placeholders == [
+                KeyValuePair("year", "2022"),
+                KeyValuePair("month", "12"),
+                KeyValuePair("day", "31"),
+                KeyValuePair("event-name", "New%20Year%E2%80%99s%20Eve"),
             ]
     );
 }

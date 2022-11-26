@@ -6,6 +6,8 @@ import oceandrift.http.microframework.routetree;
 import oceandrift.http.microframework.uri;
 import oceandrift.http.server : RequestHandler, Server;
 
+public import oceandrift.http.microframework.routetree : RoutedRequestHandler, RouteMatchMeta;
+
 @safe:
 
 Server bootWithRouter(out Router router)
