@@ -814,6 +814,12 @@ struct Request
 struct Response
 {
     mixin _Response!Response;
+
+    this(int statusCode, hstring reasonPhrase = null)
+    {
+        this._statusCode = statusCode;
+        this._reasonPhrase = reasonPhrase;
+    }
 }
 
 /// https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml

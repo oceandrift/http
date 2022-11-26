@@ -87,7 +87,16 @@ final class Server
 
                 immutable bool keepAlive = request.isKeepAlive;
 
-                Response response = _requestHandler(request, Response());
+                auto response = Response(200);
+                try
+                {
+                    response = _requestHandler(request, response);
+                }
+                catch (Exception ex)
+                {
+                    logException(ex, "Unhandled Exception thrown in request handler");
+                    response = Response(500, getReasonPhrase(500));
+                }
 
                 // dfmt off
                 response = (keepAlive)
@@ -107,19 +116,15 @@ final class Server
         }
         catch (ReadTimeoutException ex)
         {
+            // timeout → send an error 408
             try
-            {
-                sendResponse(connection, 408, getReasonPhrase(408));
-            }
+                return sendResponse(connection, 408, getReasonPhrase(408));
             catch (Exception ex)
-            {
-                assert(0, "TODO");
-            }
-            return;
+                return logException(ex, "408"); // log, close connection and forget about it
         }
         catch (Exception ex)
         {
-            logException(ex, "serve()");
+            logException(ex, "Unhandled Exception caught in Server.serve()");
             return;
         }
         finally
