@@ -73,8 +73,10 @@ int main() @safe
                 // always escape user input!
                 hstring messageEscaped = htmlEscape(urlDecode(message)).toHString;
 
-                response.body_.write(
-                    `<section style="border:2px solid #000"><h2>User Message</h2><pre style="background:#0FF">`
+                response.body_.write(`
+                    <section style="border:2px solid #000;background:#0FF;padding:1rem;margin:1rem 0">
+                    <h2>User Message</h2>
+                    <pre style="color:#C00">`
                 );
                 response.body_.write(messageEscaped);
                 response.body_.write(`</pre></section>`);
@@ -82,7 +84,10 @@ int main() @safe
 
             response.body_.write(
                 `<form method="GET" action="/form">
-                    <input type="text" name="message" required/>
+                    <label>
+                        Message:
+                        <input type="text" name="message" required />
+                    </label>
                     <input type="submit" />
                 </form>
                 </body></html>`
