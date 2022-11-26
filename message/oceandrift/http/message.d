@@ -120,6 +120,27 @@ package(oceandrift.http) struct RequestTransformer
  +/
 alias hstring = const(char)[];
 
+public @safe pure nothrow @nogc
+{
+    /// Emulate input range
+    char front(const hstring s)
+    {
+        return s[0];
+    }
+
+    /// ditto
+    bool empty(const hstring s)
+    {
+        return (s.length == 0);
+    }
+
+    /// ditto
+    void popFront(ref hstring s)
+    {
+        s = s[1 .. $];
+    }
+}
+
 /++
     Lower-case HTTP token (tchar string)
 
