@@ -64,6 +64,7 @@ private:
     in (((target !is null) && (targetR is null)) || ((target is null) && (targetR !is null)))
     {
         _target = target;
+        _targetR = targetR;
         _middleware = new MiddlewareCollection();
     }
 
