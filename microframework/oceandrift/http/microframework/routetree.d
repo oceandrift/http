@@ -29,10 +29,15 @@
 module oceandrift.http.microframework.routetree;
 
 import std.string : indexOf;
-import oceandrift.http.message : hstring;
-import oceandrift.http.server : RequestHandler;
+import oceandrift.http.message : hstring, Request, Response;
 
 @safe:
+
+alias RoutedRequestHandler = Response delegate(
+    Request request,
+    Response response,
+    RouteMatchMeta meta,
+) @safe;
 
 ///
 struct RouteTreeLink
@@ -44,20 +49,21 @@ struct RouteTreeLink
 ///
 struct RouteTreeNode
 {
-    RequestHandler requestHandler = null;
+    RoutedRequestHandler requestHandler = null;
 
     RouteTreeLink[] branches;
     RouteTreeLink wildcard;
 }
 
 ///
-void addRoute(RouteTreeNode* root, string url, RequestHandler requestHandler)
+void addRoute(RouteTreeNode* root, string url, RoutedRequestHandler requestHandler)
+in (root !is null)
 in (url[0] == '/')
 {
     return addRouteTreeNode(root, url[1 .. $], requestHandler);
 }
 
-private void addRouteTreeNode(RouteTreeNode* tree, string url, RequestHandler requestHandler)
+private void addRouteTreeNode(RouteTreeNode* tree, string url, RoutedRequestHandler requestHandler)
 {
     if (url.length == 0)
     {
@@ -201,10 +207,10 @@ unittest
     import oceandrift.http.message;
 
     // dfmt off
-    RequestHandler rh0 = delegate(Request, Response r) { return r; };
-    RequestHandler rh1 = delegate(Request, Response r) { return r.withStatus(201); };
-    RequestHandler rh2 = delegate(Request, Response r) { return r.withStatus(202); };
-    RequestHandler rh3 = delegate(Request, Response r) { return r.withStatus(203); };
+    RoutedRequestHandler rh0 = delegate(Request, Response r, RouteMatchMeta) { return r; };
+    RoutedRequestHandler rh1 = delegate(Request, Response r, RouteMatchMeta) { return r.withStatus(201); };
+    RoutedRequestHandler rh2 = delegate(Request, Response r, RouteMatchMeta) { return r.withStatus(202); };
+    RoutedRequestHandler rh3 = delegate(Request, Response r, RouteMatchMeta) { return r.withStatus(203); };
     // dfmt on
 
     auto routerRoot = new RouteTreeNode();
@@ -400,7 +406,9 @@ unittest
     import std.exception : assertThrown;
     import oceandrift.http.message;
 
-    RequestHandler rh0 = delegate(Request, Response r) { return r; };
+    RoutedRequestHandler rh0 = delegate(Request, Response r, RouteMatchMeta) {
+        return r;
+    };
     auto routerRoot = new RouteTreeNode();
 
     assertThrown!Error(routerRoot.addRoute(":id/", rh0));
@@ -428,7 +436,7 @@ struct RouteMatchMeta
 
 struct RouteMatchResult
 {
-    RequestHandler requestHandler;
+    RoutedRequestHandler requestHandler;
     RouteMatchMeta meta;
 }
 
@@ -443,7 +451,7 @@ RouteMatchResult match(RouteTreeNode* root, hstring url)
     return output;
 }
 
-private RequestHandler matchRoute(RouteTreeNode* tree, hstring url, ref RouteMatchMeta routeMatchMeta)
+private RoutedRequestHandler matchRoute(RouteTreeNode* tree, hstring url, ref RouteMatchMeta routeMatchMeta)
 {
     // direct match?
     if (url.length == 0)
@@ -482,16 +490,16 @@ unittest
     import oceandrift.http.message;
 
     // dfmt off
-    RequestHandler rhRoot = delegate(Request, Response r) { return r; };
-    RequestHandler rhHello = delegate(Request, Response r) { return r; };
-    RequestHandler rhHelloWorld = delegate(Request, Response r) { return r; };
-    RequestHandler rhHel = delegate(Request, Response r) { return r; };
-    RequestHandler rhItems = delegate(Request, Response r) { return r; };
-    RequestHandler rhItems2 = delegate(Request, Response r) { return r; };
-    RequestHandler rhItemN = delegate(Request, Response r) { return r; };
-    RequestHandler rhItemNOwner = delegate(Request, Response r) { return r; };
-    RequestHandler rhItemNOwnerPetN = delegate(Request, Response r) { return r; };
-    RequestHandler rhVisitors = delegate(Request, Response r) { return r; };
+    RoutedRequestHandler rhRoot = delegate(Request, Response r, RouteMatchMeta) { return r; };
+    RoutedRequestHandler rhHello = delegate(Request, Response r, RouteMatchMeta) { return r; };
+    RoutedRequestHandler rhHelloWorld = delegate(Request, Response r, RouteMatchMeta) { return r; };
+    RoutedRequestHandler rhHel = delegate(Request, Response r, RouteMatchMeta) { return r; };
+    RoutedRequestHandler rhItems = delegate(Request, Response r, RouteMatchMeta) { return r; };
+    RoutedRequestHandler rhItems2 = delegate(Request, Response r, RouteMatchMeta) { return r; };
+    RoutedRequestHandler rhItemN = delegate(Request, Response r, RouteMatchMeta) { return r; };
+    RoutedRequestHandler rhItemNOwner = delegate(Request, Response r, RouteMatchMeta) { return r; };
+    RoutedRequestHandler rhItemNOwnerPetN = delegate(Request, Response r, RouteMatchMeta) { return r; };
+    RoutedRequestHandler rhVisitors = delegate(Request, Response r, RouteMatchMeta) { return r; };
     // dfmt on
 
     auto routerRoot = new RouteTreeNode(rhRoot);
