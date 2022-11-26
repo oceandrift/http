@@ -36,7 +36,7 @@ module oceandrift.http.message;
 
 import std.traits : ReturnType;
 
-@safe:
+@safe pure:
 
 /++
     Case-insensitive ASCII-string comparision
@@ -381,6 +381,8 @@ unittest
 
 struct Body
 {
+@safe pure nothrow:
+
     import std.array : appender, Appender;
     import std.traits : isIntegral;
 
@@ -479,6 +481,8 @@ struct Body
  */
 mixin template _Message(TMessage)
 {
+@safe pure nothrow:
+
     private
     {
         hstring _protocol;
@@ -493,7 +497,7 @@ mixin template _Message(TMessage)
      *
      * @return string HTTP protocol version.
      */
-    hstring protocol()
+    hstring protocol() const
     {
         return _protocol;
     }
@@ -721,6 +725,8 @@ mixin template _Message(TMessage)
  */
 mixin template _Request(TRequest)
 {
+@safe pure nothrow:
+
     mixin _Message!TRequest;
 
     private
@@ -734,7 +740,7 @@ mixin template _Request(TRequest)
      *
      * @return string Returns the request method.
      */
-    hstring method()
+    hstring method() const
     {
         return _method;
     }
@@ -770,7 +776,7 @@ mixin template _Request(TRequest)
      * @return UriInterface Returns a UriInterface instance
      *     representing the URI of the request.
      */
-    hstring uri()
+    hstring uri() const
     {
         return _uri;
     }
@@ -830,6 +836,8 @@ mixin template _Request(TRequest)
  */
 mixin template _Response(TResponse)
 {
+@safe pure nothrow:
+
     mixin _Message!TResponse;
 
     private
@@ -846,7 +854,7 @@ mixin template _Response(TResponse)
      *
      * @return int Status code.
      */
-    int statusCode()
+    int statusCode() const
     {
         return _statusCode;
     }
