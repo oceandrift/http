@@ -32,88 +32,112 @@ int parseRequest(TCPConnection connection, out Request request) //int parseReque
 
     ubyte[] buffer = new ubyte[](requestInitialBufferSize);
 
+    // Create header parser (httparsed)
     auto parser = initParser!RequestTransformer();
     parser.setup();
-    int status = 0;
+
+    int httparsedStatus = 0;
+    size_t bytesReadTotalWhileParsingHeaders = 0;
     uint headerParserLastPos = 0;
+
+    // parse header
+    while (true)
     {
-        int bytesReadTotal = 0;
+        // wait for data
+        if (!connection.waitForData(dur!"minutes"(2)))
+            return 408;
 
-        // parse header
-        while (true)
+        // read buffer
+        size_t bytesRead = connection.read(
+            buffer[bytesReadTotalWhileParsingHeaders .. $],
+            IOMode.once
+        );
+        bytesReadTotalWhileParsingHeaders += bytesRead;
+
+        // call httparsed
+        delegate() @trusted {
+            httparsedStatus = parser.parseRequest(buffer[0 .. bytesReadTotalWhileParsingHeaders], headerParserLastPos);
+        }();
+
+        if (httparsedStatus == statusPartial) // httparsed reports partial data; grow buffer and retry
         {
-            // wait for data
-            if (!connection.waitForData(dur!"minutes"(2)))
-                return 408;
+            if (buffer.length >= 16_384)
+                throw new Exception("Request headers too big.");
 
-            // read buffer
-            size_t bytesRead = connection.read(buffer[bytesReadTotal .. $], IOMode.once);
-            bytesReadTotal += bytesRead;
-
-            delegate() @trusted {
-                status = parser.parseRequest(buffer[0 .. bytesReadTotal], headerParserLastPos);
-            }();
-
-            if (status == statusPartial)
-            {
-                if (buffer.length >= 16_384)
-                    throw new Exception("Request headers too big.");
-
-                buffer.length += buffer.length;
-            }
-            else if (status >= 0)
-                break;
-            else
-                return status;
+            // grow buffer
+            buffer.length += buffer.length;
         }
+        else if (httparsedStatus >= 0) // fine
+            break;
+        else // error (in httparsed)
+            return httparsedStatus;
     }
 
     request = parser.getData();
+
+    // -- Parse body
+
     auto reqBody = Body();
 
-    if (!request.hasHeader!"Content-Length")
+    hstring[] headerContentLength = request.getHeader!"Content-Length"();
+    if (headerContentLength.length == 0)
     {
         if (request.hasHeader!"Transfer-Encoding")
-            return 501;
+            return 501; // unsupported because not implemented
 
         // empty body
         return 0;
     }
 
-    buffer = buffer[headerParserLastPos .. $];
+    buffer = buffer[httparsedStatus .. $];
 
-    hstring[] headerContentLength = request.getHeader!"Content-Length"();
+    // More than one “Content-Length” header?
     if (headerContentLength.length > 1)
         return 400; // am I supposed to guess which one’s correct, huh?!
 
-    size_t contentLength = headerContentLength[0].to!size_t;
+    // Parse content-length header
+    size_t contentLength = 0;
+    try
+        contentLength = headerContentLength[0].to!size_t;
+    catch (Exception) // not a positive integer
+        return 400;
 
+    // Within max length
     if (contentLength > requestMaxBodySize)
-        throw new Exception("Request too big; limit: " ~ requestMaxBodySize.to!string);
+        throw new Exception("Request too big; limit: " ~ requestMaxBodySize.to!string); // TODO
 
-    if (contentLength > buffer.length)
+    // Determine number of body bytes already read
+    immutable size_t alreadyReadBody = bytesReadTotalWhileParsingHeaders - headerParserLastPos;
+    // Write them to the body object
+    reqBody.write(buffer[0 .. alreadyReadBody]);
+
+    // Determine number of bytes left to read (for the body)
+    size_t contentLengthLeft = contentLength - alreadyReadBody;
+    while (contentLengthLeft > 0)
     {
-        reqBody.write(buffer);
-
-        immutable size_t contentLengthLeft = contentLength - buffer.length;
-        buffer = new ubyte[](contentLengthLeft);
+        // Shrink view to the buffer when necessary,
+        // so a IOMode.all can be used (which fills the whole buffer)
+        // and we can simply flush the whole buffer each time
+        if (contentLengthLeft < buffer.length)
+            buffer = buffer[0 .. contentLengthLeft];
 
         try
-            connection.read(buffer, IOMode.all);
+        {
+            immutable size_t bytesRead = connection.read(buffer, IOMode.all);
+            contentLengthLeft -= bytesRead;
+        }
         catch (Exception ex)
             return 408;
 
+        // Flush current buffer to the body object
         reqBody.write(buffer);
     }
-    else
-    {
-        if (contentLength > 0)
-            reqBody.write(buffer[0 .. contentLength]);
-    }
 
+    // Store body in request object
     parser.onBody(reqBody);
     request = parser.getData();
 
+    // Report success
     return 0;
 }
 
