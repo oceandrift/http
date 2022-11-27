@@ -17,6 +17,9 @@ public import oceandrift.http.microframework.kvp;
 
     (e.g. “q=search+term”)
 
+    Returns:
+        [KeyValuePair] – key will be empty if the input was bogus
+
     See_Also:
         $(LIST
             - [parseQueryString] for parsing query strings (with multiple components)
@@ -45,6 +48,11 @@ unittest
     assert(parseQueryComponent("foo") == KeyValuePair("foo", null));
     assert(parseQueryComponent("foo") == KeyValuePair("foo", ""));
     assert(parseQueryComponent("foo=") == KeyValuePair("foo", null));
+
+    // bogus
+    assert(parseQueryComponent("=") == KeyValuePair(null, null));
+    assert(parseQueryComponent("") == KeyValuePair(null, null));
+    assert(parseQueryComponent("==") == KeyValuePair(null, "=")); // non-sensical though
 }
 
 /++
@@ -60,23 +68,29 @@ KeyValuePair[] parseQueryString(const hstring queryString)
     KeyValuePair[] output = [];
     hstring query = queryString;
 
-    while (true)
+    do
     {
-        ptrdiff_t next = query.indexOf('&');
+        // locate separator
+        immutable ptrdiff_t next = query.indexOf('&');
 
-        if (next < 0) // last element?
-        {
-            if (query.length == 0)
-                break;
+        // last element?
+        immutable endOfComponent = (next < 0) ? query.length : next;
 
-            output ~= parseQueryComponent(query);
+        // parse the query component
+        KeyValuePair kvp = parseQueryComponent(query[0 .. endOfComponent]);
+
+        // non-bogus?
+        if (kvp.key.length > 0)
+            output ~= kvp;
+
+        // last element? → break “endless” loop
+        if (next < 0)
             break;
-        }
 
-        output ~= parseQueryComponent(query[0 .. next]);
-
-        query = query[(next + 1) .. $]; //
+        // advance buffer view
+        query = query[(endOfComponent + 1) .. $];
     }
+    while (true);
 
     return output;
 }
@@ -99,6 +113,29 @@ unittest
             KeyValuePair("he%20y", "there"),
             KeyValuePair("s%20e%20e", "you"),
             KeyValuePair("nice%20", "to%20meet%20you"),
+        ]
+    );
+
+    assert(parseQueryString("this-is=bogus&") == [
+            KeyValuePair("this-is", "bogus"),
+        ]
+    );
+    assert(parseQueryString("this-is=bogus&&") == [
+            KeyValuePair("this-is", "bogus"),
+        ]
+    );
+    assert(parseQueryString("&&this-is=bogus") == [
+            KeyValuePair("this-is", "bogus"),
+        ]
+    );
+    assert(parseQueryString("&&this-is=bogus&&") == [
+            KeyValuePair("this-is", "bogus"),
+        ]
+    );
+    assert(parseQueryString("&&this-is=bogus&&&as==can-be&&&&x&&") == [
+            KeyValuePair("this-is", "bogus"),
+            KeyValuePair("as", "=can-be"),
+            KeyValuePair("x", null),
         ]
     );
 }
