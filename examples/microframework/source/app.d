@@ -67,28 +67,35 @@ int main() @safe
             );
 
             // check whether there’s a query parameter (aka “GET parameter”) named “message”
-            hstring message;
-            if (request.queryParams.tryGet("message", message) && (message.length > 0))
+            hstring message = request.queryParams.get("message");
+            if (message.length > 0)
             {
                 // always escape user input!
                 hstring messageEscaped = htmlEscape(urlDecode(message)).toHString;
 
                 response.body_.write(`
                     <section style="border:2px solid #000;background:#0FF;padding:1rem;margin:1rem 0">
-                    <h2>User Message</h2>
-                    <pre style="color:#C00">`
+                        <h2>User Message (via Query Parameter)</h2>
+                        <pre style="color:#C00">`
                 );
                 response.body_.write(messageEscaped);
                 response.body_.write(`</pre></section>`);
             }
 
-            response.body_.write(
-                `<form method="GET" action="/form">
+            response.body_.write(`
+                <form method="GET" action="/form">
                     <label>
                         Message:
                         <input type="text" name="message" required />
                     </label>
-                    <input type="submit" />
+                    <input type="submit" value="Submit (GET)"/>
+                </form>
+                <form method="POST" action="/form">
+                    <label>
+                        Message:
+                        <input type="text" name="message" required />
+                    </label>
+                    <input type="submit" value="Submit (POST)"/>
                 </form>
                 </body></html>`
             );
@@ -97,6 +104,32 @@ int main() @safe
             return response
                 .withHeader!"Content-Type"("text/html; charset=UTF-8")
                 .withHeader!"Server"("oceandrift/http");
+        });
+
+        // POST /form
+        router.post("/form", delegate(Request request, Response response) {
+            // check whether there’s a form data field (aka “POST parameter”) named “message”
+            hstring message = request.formData.get("message");
+            if (message.length == 0)
+            {
+                // no or empty “message” parameter
+                response.body_.write("Bad request");
+                return response.withStatus(400);
+            }
+
+            response.body_.write(
+                `<!DOCTYPE html><html><body><h1>oceandrift/http</h1>
+                <p>Microframework POST request example</p>
+                    <h2>User Message (via Form Data)</h2>
+                    <pre style="background:#EEE">`
+            );
+
+            // always escape user input!
+            response.body_.write(htmlEscape(message).toHString);
+
+            response.body_.write(`</pre></body></html>`);
+
+            return response;
         });
     });
 }

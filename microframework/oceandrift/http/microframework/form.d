@@ -4,7 +4,7 @@
 module oceandrift.http.microframework.form;
 
 import std.string : indexOf;
-import oceandrift.http.message : Request;
+import oceandrift.http.message : Body, Request;
 import oceandrift.http.microframework.uri;
 
 public import oceandrift.http.message : hstring;
@@ -65,6 +65,8 @@ unittest
  +/
 KeyValuePair[] parseQueryString(const hstring queryString)
 {
+    // TODO: Range version
+
     KeyValuePair[] output = [];
     hstring query = queryString;
 
@@ -183,4 +185,70 @@ unittest
 KeyValuePair[] queryParams(const Request request)
 {
     return parseQueryStringFromURL(request.uri);
+}
+
+private
+{
+    enum contentTypeMultipart = "multipart/form-data;";
+    enum contentTypeURLEncoded = "application/x-www-form-urlencoded";
+}
+
+/++
+    Standards:
+        https://www.rfc-editor.org/rfc/rfc7578
++/
+KeyValuePair[] formData(Request request)
+{
+    hstring[] contentType = request.getHeader!"Content-Type";
+    if (contentType.length == 0)
+        return null;
+
+    // form urlencoded?
+    if (contentType[0] == contentTypeURLEncoded)
+        return parseFormDataURLEncoded(request.body_.toString());
+
+    if (contentType[0][0 .. contentTypeMultipart.length] == contentTypeMultipart)
+        return parseFormDataMultipart(contentType[0], request.body_);
+
+    return null;
+}
+/++
+    Standards:
+        https://www.rfc-editor.org/rfc/rfc7578
++/
+bool tryGetFormData(Request request, out KeyValuePair[] formData)
+{
+    hstring[] contentType = request.getHeader!"Content-Type";
+    if (contentType.length == 0)
+        return false;
+
+    // form urlencoded?
+    if (contentType[0] == contentTypeURLEncoded)
+    {
+        formData = parseFormDataURLEncoded(request.body_.toString());
+        return true;
+    }
+
+    if (contentType[0][0 .. contentTypeMultipart.length] == contentTypeMultipart)
+    {
+        formData = parseFormDataMultipart(contentType[0], request.body_);
+        return true;
+    }
+
+    return false;
+}
+
+KeyValuePair[] parseFormDataURLEncoded(hstring bodyData)
+{
+    KeyValuePair[] output = parseQueryString(bodyData);
+
+    foreach (ref item; output)
+        item = KeyValuePair(urlDecode(item.key).toHString, urlDecode(item.value).toHString);
+
+    return output;
+}
+
+KeyValuePair[] parseFormDataMultipart(const hstring contentType, ref Body body)
+{
+    assert(false, "Not implemented");
 }
