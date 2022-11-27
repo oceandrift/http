@@ -13,7 +13,9 @@ public import oceandrift.http.microframework.kvp;
 @safe pure nothrow:
 
 /++
-    Parses a query component (e.g. “q=search+term”)
+    Parses a query component
+
+    (e.g. “q=search+term”)
 
     See_Also:
         $(LIST
@@ -46,16 +48,17 @@ unittest
 }
 
 /++
-    Parses a query component (e.g. “q=search+term”)
+    Parses a query string
+
+    (e.g. “q=search+term&category=things1”)
 
     See_Also:
         [queryParams] for parsing query strings from whole [Request]s
  +/
-KeyValuePair[] parseQueryString(const hstring url)
+KeyValuePair[] parseQueryString(const hstring queryString)
 {
-    hstring query = url.query;
-
     KeyValuePair[] output = [];
+    hstring query = queryString;
 
     while (true)
     {
@@ -81,14 +84,50 @@ KeyValuePair[] parseQueryString(const hstring url)
 ///
 unittest
 {
+    assert(parseQueryString("q=search+term&category=things1") == [
+            KeyValuePair("q", "search+term"),
+            KeyValuePair("category", "things1"),
+        ]
+    );
+
+    assert(parseQueryString("q=search+term") == [
+            KeyValuePair("q", "search+term"),
+        ]
+    );
+
+    assert(parseQueryString("he%20y=there&s%20e%20e=you&nice%20=to%20meet%20you") == [
+            KeyValuePair("he%20y", "there"),
+            KeyValuePair("s%20e%20e", "you"),
+            KeyValuePair("nice%20", "to%20meet%20you"),
+        ]
+    );
+}
+
+/++
+    Parses a query string from a URL
+
+    (e.g. “http://example.com?q=search+term”)
+
+    See_Also:
+        [queryParams] for parsing query strings from whole [Request]s
+ +/
+KeyValuePair[] parseQueryStringFromURL(const hstring url)
+{
+    return parseQueryString(url.query);
+}
+
+///
+unittest
+{
     {
-        const q = parseQueryString("https://forum.dlang.org/search?q=search+term&scope=forum");
+        const q = parseQueryStringFromURL(
+            "https://forum.dlang.org/search?q=search+term&scope=forum");
         assert(q[0] == KeyValuePair("q", "search+term"));
         assert(q[1] == KeyValuePair("scope", "forum"));
     }
 
     {
-        const q = parseQueryString("/search?q=search+term&scope=forum");
+        const q = parseQueryStringFromURL("/search?q=search+term&scope=forum");
         assert(q[0] == KeyValuePair("q", "search+term"));
         assert(q[1] == KeyValuePair("scope", "forum"));
     }
@@ -106,5 +145,5 @@ unittest
  +/
 KeyValuePair[] queryParams(const Request request)
 {
-    return parseQueryString(request.uri);
+    return parseQueryStringFromURL(request.uri);
 }

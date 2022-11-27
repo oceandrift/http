@@ -60,11 +60,26 @@ bool tryGet(KeyValuePair[] array, hstring key, out hstring result)
 /++
     Returns the value of the [KeyValuePair] with the specified key in the passed array
  +/
-hstring get(KeyValuePair[] array, hstring key)
+hstring get(KeyValuePair[] array, hstring key, hstring substituteIfNotFound = null)
 {
     foreach (kvp; array)
         if (kvp.key == key)
             return kvp.value;
 
-    assert(false, "Key does not exist in input array");
+    return substituteIfNotFound;
+}
+
+bool empty(const KeyValuePair[] array)
+{
+    return (array.length == 0);
+}
+
+KeyValuePair front(KeyValuePair[] array)
+{
+    return array[0];
+}
+
+void popFront(ref KeyValuePair[] array)
+{
+    array = array[1 .. $];
 }

@@ -42,7 +42,7 @@ int main() @safe
 
             // request URI decoded
             response.body_.write("\nURI Decoded:\n\t");
-            response.body_.write(request.uri.urlDecode.toHString);
+            response.body_.write(urlDecode(request.uri).toHString);
 
             // path string of request URI (“the string before the '?'”)
             response.body_.write("\nPath:\n\t");
