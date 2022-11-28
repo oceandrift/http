@@ -861,6 +861,11 @@ bool isTChar(const char c) pure nothrow @nogc
 ///
 alias hbuffer = const(ubyte)[];
 
+/++
+    List of multiple buffers
+
+    Stores slices to (potentially indepenant) buffers.
+ +/
 struct MultiBuffer
 {
 @safe pure nothrow:
@@ -873,21 +878,46 @@ struct MultiBuffer
         size_t _bufferListUsedLength = 0;
     }
 
+    /++
+        Current capacity of the list
+
+        $(TIP
+            Probably not what you were looking for.
+        )
+
+        See_Also:
+        $(LIST
+            * dataLength – length of all data from all buffers
+            * length – number of buffers in the list
+        )
+     +/
     size_t capacity() const @nogc
     {
         return _bufferList.length;
     }
 
+    /++
+        Number of buffers
+
+        See_Also:
+            [dataLength]
+     +/
     size_t length() const @nogc
     {
         return _bufferListUsedLength;
     }
 
+    /++
+        Reserves a certain extra capacity in the list to be available without further allocations
+     +/
     void reserve(size_t n)
     {
         _bufferList.length += n;
     }
 
+    /++
+        Appends the passed buffer to the buffer list
+     +/
     void append(T)(T buffer) if (__traits(compiles, (T b) => cast(hbuffer) b))
     {
         this.ensureCapacity();
@@ -896,6 +926,10 @@ struct MultiBuffer
         ++_bufferListUsedLength;
     }
 
+    /++
+        Allocates a new buffer, copies over the data from the passed buffer
+        and appends it the the buffer list
+     +/
     void appendCopy(T)(T buffer) if (__traits(compiles, (T b) => cast(hbuffer) b))
     {
         ubyte[] bCopy = (cast(hbuffer) buffer).dup;
@@ -903,7 +937,7 @@ struct MultiBuffer
         return this.append(bCopy);
     }
 
-    void write(Args...)(Args buffers)
+    void write(Buffers...)(Buffers buffers)
     {
         static foreach (buffer; buffers)
         {
@@ -912,11 +946,26 @@ struct MultiBuffer
         }
     }
 
+    /++
+        Appends a buffer to the buffer list
+     +/
     void opOpAssign(string op : "~", T)(T buffer)
     {
         return this.append(buffer);
     }
 
+    /++
+        Returns:
+            The buffer at the requested position
+     +/
+    ref hbuffer opIndex(size_t index)
+    {
+        return _bufferList[index];
+    }
+
+    /++
+        Calculates the total length of all data from all linked buffers
+     +/
     size_t dataLength() inout @nogc
     {
         size_t length = 0;
@@ -926,6 +975,9 @@ struct MultiBuffer
         return length;
     }
 
+    /++
+        Allocates a new “big” buffer containing all data from all linked buffers
+     +/
     immutable(ubyte)[] data() inout
     {
         ubyte[] output = new ubyte[](this.dataLength);
@@ -940,23 +992,29 @@ struct MultiBuffer
         return output;
     }
 
+    /++
+        Allocates a new string containing all data from all linked buffers
+     +/
     string toString() inout
     {
         return cast(string) this.data();
     }
 
-    public  // range
+    public @nogc // range
     {
+        ///
         bool empty() inout
         {
             return (_bufferListUsedLength == 0);
         }
 
+        ///
         hbuffer front() inout
         {
             return _bufferList[0];
         }
 
+        ///
         void popFront()
         {
             _bufferList = _bufferList[1 .. $];
@@ -987,11 +1045,176 @@ unittest
     assert(mb.dataLength == 0);
     assert(mb.data == []);
 
-    string a = "0123";
+    char[] a = ['0', '1', '2', '3'];
     mb.appendCopy(a);
     assert(!mb.empty);
     assert(mb.length == 1);
     assert(mb.capacity == mb.defaultReserve);
     assert(mb.dataLength == a.length);
     assert(mb.data == a);
+    a[0] = '9';
+    assert(mb.front == "0123");
+
+    char[] b = ['4', '5', '6', '7'];
+    mb.append(b);
+    assert(!mb.empty);
+    assert(mb.length == 2);
+    assert(mb.capacity == mb.defaultReserve);
+    assert(mb.dataLength == (a.length + b.length));
+    assert(mb.data == "01234567");
+
+    b[0] = '9';
+    assert(mb.data == "01239567");
+}
+
+/++
+    Access MultiBuffers as if they were single buffers
+ +/
+struct MultiBufferView
+{
+@safe pure nothrow @nogc:
+
+    private
+    {
+        MultiBuffer _mb;
+        hbuffer _currentBuffer;
+    }
+
+    ///
+    this(MultiBuffer mb)
+    {
+        _mb = mb;
+
+        if (_mb.empty)
+            return;
+
+        _currentBuffer = _mb.front;
+        advanceFront();
+    }
+
+    ///
+    bool empty()
+    {
+        return _mb.empty;
+    }
+
+    ///
+    ubyte front()
+    {
+        return _currentBuffer[0];
+    }
+
+    ///
+    void popFront()
+    {
+        _currentBuffer = _currentBuffer[1 .. $];
+        return advanceFront();
+    }
+
+    ubyte opIndex(size_t index)
+    {
+        // start scanning from the current position in the current buffer
+        if (index < _currentBuffer.length)
+            return _currentBuffer[index];
+
+        // not there yet, substract difference from search position
+        index -= _currentBuffer.length;
+
+        // prepare next buffer
+        MultiBuffer mb = _mb;
+        mb.popFront();
+
+        // scan buffer by buffer
+        while (!mb.empty)
+        {
+            if (index < mb.front.length)
+                return mb.front[index];
+
+            index -= mb.front.length;
+            mb.popFront();
+        }
+
+        assert(false, "Out of range");
+    }
+
+    private void advanceFront()
+    {
+        while (_currentBuffer.length == 0)
+        {
+            _mb.popFront();
+
+            if (_mb.empty)
+                break;
+
+            _currentBuffer = _mb.front;
+        }
+    }
+}
+
+unittest
+{
+    auto mb = MultiBuffer();
+
+    {
+        auto mbv = MultiBufferView(mb);
+        assert(mbv.empty);
+    }
+
+    mb.write("asdf", "1234", "q", "", "0000000000!");
+
+    auto mbv = MultiBufferView(mb);
+
+    assert(mbv[0] == 'a');
+    assert(mbv[3] == 'f');
+    assert(mbv[4] == '1');
+    assert(mbv[8] == 'q');
+    assert(mbv[9] == '0');
+    assert(mbv[19] == '!');
+
+    assert(!mbv.empty);
+    assert(mbv.front == 'a');
+    mbv.popFront();
+    assert(!mbv.empty);
+    assert(mbv.front == 's');
+    mbv.popFront();
+    assert(!mbv.empty);
+    assert(mbv.front == 'd');
+    mbv.popFront();
+    assert(!mbv.empty);
+    assert(mbv.front == 'f');
+    mbv.popFront();
+    assert(!mbv.empty);
+    assert(mbv.front == '1');
+    static foreach (idx; 0 .. 4)
+        mbv.popFront();
+    assert(mbv.front == 'q');
+    mbv.popFront();
+    assert(!mbv.empty);
+    assert(mbv.front == '0');
+    static foreach (idx; 0 .. 10)
+        mbv.popFront();
+    assert(!mbv.empty);
+    assert(mbv.front == '!');
+    mbv.popFront();
+    assert(mbv.empty);
+}
+
+///
+unittest
+{
+    auto mb = MultiBuffer();
+    mb.write("", "01");
+
+    auto mbv = MultiBufferView(mb);
+    assert(!mbv.empty);
+    assert(mbv.front == '0');
+    assert(mbv[0] == '0');
+    assert(mbv[1] == '1');
+
+    mbv.popFront();
+    assert(mbv.front == '1');
+    assert(mbv[0] == '1');
+
+    mbv.popFront();
+    assert(mbv.empty);
 }
