@@ -4,7 +4,7 @@
 module oceandrift.http.microframework.form;
 
 import std.string : indexOf;
-import oceandrift.http.message : Body, Request;
+import oceandrift.http.message : MultiBuffer, Request;
 import oceandrift.http.microframework.uri;
 
 public import oceandrift.http.message : hstring;
@@ -248,7 +248,7 @@ KeyValuePair[] parseFormDataURLEncoded(hstring bodyData)
     return output;
 }
 
-KeyValuePair[] parseFormDataMultipart(const hstring contentType, ref Body body)
+KeyValuePair[] parseFormDataMultipart(const hstring contentType, ref MultiBuffer body)
 {
     assert(false, "Not implemented");
 }

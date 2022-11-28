@@ -77,7 +77,7 @@ int parseRequest(TCPConnection connection, out Request request) //int parseReque
 
     // -- Parse body
 
-    auto reqBody = Body();
+    auto reqBody = MultiBuffer();
 
     hstring[] headerContentLength = request.getHeader!"Content-Length"();
     if (headerContentLength.length == 0)
@@ -113,24 +113,41 @@ int parseRequest(TCPConnection connection, out Request request) //int parseReque
 
     // Determine number of bytes left to read (for the body)
     size_t contentLengthLeft = contentLength - alreadyReadBody;
-    while (contentLengthLeft > 0)
+
+    // If there’s something left, first use what’s left from the already allocated buffer,
+    // then allocate a new one for the rest
+    if (contentLengthLeft > 0)
     {
-        // Shrink view to the buffer when necessary,
-        // so a IOMode.all can be used (which fills the whole buffer)
-        // and we can simply flush the whole buffer each time
-        if (contentLengthLeft < buffer.length)
+        buffer = buffer[alreadyReadBody .. $];
+        if (contentLengthLeft <= buffer.length)
             buffer = buffer[0 .. contentLengthLeft];
 
         try
         {
             immutable size_t bytesRead = connection.read(buffer, IOMode.all);
             contentLengthLeft -= bytesRead;
+            reqBody.write(buffer[0 .. bytesRead]);
         }
         catch (Exception ex)
             return 408;
 
-        // Flush current buffer to the body object
-        reqBody.write(buffer);
+        // Still a few body bytes left?
+        if (contentLengthLeft > 0)
+        {
+            // Allocate a new buffer to fit the whole rest of the request body at once
+            buffer = new ubyte[](contentLengthLeft);
+
+            try
+            {
+                immutable size_t bytesRead = connection.read(buffer, IOMode.all);
+                assert(contentLengthLeft == bytesRead);
+            }
+            catch (Exception ex)
+                return 408;
+
+            // Append buffer to the body object
+            reqBody.write(buffer);
+        }
     }
 
     // Store body in request object
@@ -164,11 +181,12 @@ void sendResponse(TCPConnection connection, Response response)
         }
     }
     connection.write("content-length: ");
-    connection.write(response.body_.data.length.to!string);
+    connection.write(response.body_.dataLength.to!string);
     connection.write(CRLF);
 
     connection.write(CRLF);
-    connection.write(response.body_.data);
+    foreach (data; response.body_)
+        connection.write(data);
     connection.flush();
 }
 

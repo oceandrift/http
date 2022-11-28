@@ -23,7 +23,7 @@ int main() @safe
         );
         foreach (Header h; request.headers)
             foreach (value; h.values)
-                response.body_.write(h.name, ": ", value, '\n');
+                response.body_.write(h.name, ": ", value, "\n");
 
         // return response with “content-type” + “server” headers
         return response

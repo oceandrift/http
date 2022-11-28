@@ -80,9 +80,9 @@ package(oceandrift.http) struct RequestTransformer
         _msg._headers.append(name, value);
     }
 
-    void onBody(Body body_)
+    void onBody(MultiBuffer body)
     {
-        _msg._body = body_;
+        _msg._body = body;
     }
 }
 
@@ -377,94 +377,6 @@ unittest
     assert(LowerCaseToken.makeConverted("Host") !in headers);
 }
 
-struct Body
-{
-@safe pure nothrow:
-
-    import std.array : appender, Appender;
-    import std.traits : isIntegral;
-
-    private
-    {
-        Appender!(const(ubyte)[]) _data;
-    }
-
-    const(ubyte)[] data() const
-    {
-        return _data.data;
-    }
-
-    hstring toString() const
-    {
-        return cast(hstring) _data.data;
-    }
-
-    void rewind()
-    {
-        _data = appender!(const(ubyte)[]);
-    }
-
-    void write(const(ubyte)[] data)
-    {
-        _data.put(data);
-    }
-
-    void write(hstring data)
-    {
-        this.write(cast(const(ubyte)[]) data);
-    }
-
-    void write(ubyte c)
-    {
-        _data.put([c]);
-    }
-
-    void write(char c)
-    {
-        this.write(cast(ubyte) c);
-    }
-
-    void write(Integer)(Integer i) if (isIntegral!Integer)
-    {
-        import std.conv : to;
-
-        this.write(i.to!string);
-    }
-
-    void write(Args...)(Args args)
-    {
-        import std.traits : isArray, Unqual;
-
-        static foreach (a; args)
-        {
-            {
-                alias T = Unqual!(typeof(a));
-                static if (isArray!T)
-                {
-                    {
-                        alias TE = Unqual!(typeof(a[0]));
-                        static if (is(TE == ubyte))
-                            this.write(a);
-                        else static if (is(TE == char))
-                            this.write(a);
-                        else
-                            static assert(0, "incompatible array type");
-                    }
-
-                }
-                else static if (is(T == ubyte))
-                    this.write(a);
-                else static if (is(T == char))
-                    this.write(a);
-                else static if (isIntegral!T)
-                    this.write(a);
-                else
-                    static assert(0, "Cannot write element of type `" ~ typeof(a).stringof ~ "`");
-            }
-        }
-    }
-}
-
 /++
     Representation of common parts of HTTP requests and responses
 
@@ -482,7 +394,7 @@ mixin template _Message(TMessage)
     {
         hstring _protocol = "1.1";
         Headers _headers;
-        Body _body;
+        MultiBuffer _body;
     }
 
     /++
@@ -661,7 +573,7 @@ mixin template _Message(TMessage)
     /++
         Gets the body of the message
      +/
-    ref Body body_() return
+    ref MultiBuffer body_() return
     {
         return _body;
     }
@@ -672,7 +584,7 @@ mixin template _Message(TMessage)
         Returns:
             A new Message with the updated property
      +/
-    TMessage withBody(Body body_)
+    TMessage withBody(MultiBuffer body_)
     {
         TMessage m = this;
         m._body = body_;
@@ -944,4 +856,142 @@ bool isTChar(const char c) pure nothrow @nogc
         // dfmt on
 
     return true;
+}
+
+///
+alias hbuffer = const(ubyte)[];
+
+struct MultiBuffer
+{
+@safe pure nothrow:
+
+    private
+    {
+        enum defaultReserve = 16;
+
+        hbuffer[] _bufferList;
+        size_t _bufferListUsedLength = 0;
+    }
+
+    size_t capacity() const @nogc
+    {
+        return _bufferList.length;
+    }
+
+    size_t length() const @nogc
+    {
+        return _bufferListUsedLength;
+    }
+
+    void reserve(size_t n)
+    {
+        _bufferList.length += n;
+    }
+
+    void append(T)(T buffer) if (__traits(compiles, (T b) => cast(hbuffer) b))
+    {
+        this.ensureCapacity();
+
+        _bufferList[_bufferListUsedLength] = cast(hbuffer) buffer;
+        ++_bufferListUsedLength;
+    }
+
+    void appendCopy(T)(T buffer) if (__traits(compiles, (T b) => cast(hbuffer) b))
+    {
+        ubyte[] bCopy = (cast(hbuffer) buffer).dup;
+
+        return this.append(bCopy);
+    }
+
+    void write(Args...)(Args buffers)
+    {
+        static foreach (buffer; buffers)
+        {
+            static assert(__traits(compiles, (typeof(buffer) b) => cast(hbuffer) b), "Incompatible buffer type");
+            this.append(buffer);
+        }
+    }
+
+    void opOpAssign(string op : "~", T)(T buffer)
+    {
+        return this.append(buffer);
+    }
+
+    size_t dataLength() inout @nogc
+    {
+        size_t length = 0;
+        foreach (buffer; _bufferList[0 .. _bufferListUsedLength])
+            length += buffer.length;
+
+        return length;
+    }
+
+    immutable(ubyte)[] data() inout
+    {
+        ubyte[] output = new ubyte[](this.dataLength);
+
+        size_t i = 0;
+        foreach (buffer; _bufferList[0 .. _bufferListUsedLength])
+        {
+            output[i .. (i + buffer.length)] = buffer[0 .. $];
+            i += buffer.length;
+        }
+
+        return output;
+    }
+
+    string toString() inout
+    {
+        return cast(string) this.data();
+    }
+
+    public  // range
+    {
+        bool empty() inout
+        {
+            return (_bufferListUsedLength == 0);
+        }
+
+        hbuffer front() inout
+        {
+            return _bufferList[0];
+        }
+
+        void popFront()
+        {
+            _bufferList = _bufferList[1 .. $];
+            --_bufferListUsedLength;
+        }
+    }
+
+private:
+
+    void ensureCapacity()
+    {
+        if (_bufferList.length != _bufferListUsedLength)
+            return;
+
+        immutable size_t toReserve = (_bufferList.length == 0)
+            ? defaultReserve : (_bufferListUsedLength + (_bufferListUsedLength / 2));
+
+        this.reserve(toReserve);
+    }
+}
+
+unittest
+{
+    MultiBuffer mb;
+    assert(mb.empty);
+    assert(mb.capacity == 0);
+    assert(mb.length == 0);
+    assert(mb.dataLength == 0);
+    assert(mb.data == []);
+
+    string a = "0123";
+    mb.appendCopy(a);
+    assert(!mb.empty);
+    assert(mb.length == 1);
+    assert(mb.capacity == mb.defaultReserve);
+    assert(mb.dataLength == a.length);
+    assert(mb.data == a);
 }
