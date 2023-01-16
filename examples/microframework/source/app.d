@@ -113,7 +113,7 @@ int main() @safe
             if (message.length == 0)
             {
                 // no or empty “message” parameter
-                response.body_.write("Bad request");
+                response.body_.write("Bad request, no or empty “message” parameter");
                 return response.withStatus(400);
             }
 

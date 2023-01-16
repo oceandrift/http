@@ -228,6 +228,11 @@ bool equalsCaseInsensitive(const hstring a, const LowerCaseToken b) pure nothrow
     return true;
 }
 
+bool equalsCaseInsensitive(const const(ubyte)[] a, const LowerCaseToken b) pure nothrow @nogc
+{
+    return equalsCaseInsensitive(cast(hstring) a, b);
+}
+
 unittest
 {
     import std.exception;
