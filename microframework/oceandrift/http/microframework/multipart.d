@@ -286,48 +286,15 @@ private hstring nameFromContentDisposition(hstring contentDisposition) @nogc
     // TODO
 }
 
-// TODO: "generic" header value parser, would be usable for determining “boundary” as well
-
 hstring determineMultipartBoundary(const hstring contentType) @nogc
 {
-    enum keywordBoundary = "boundary=";
+    import oceandrift.http.microframework.hparser : parseHeaderValue;
 
-    // determine start of boundary param
-    immutable ptrdiff_t idxBoundary = contentType.indexOf(keywordBoundary);
+    foreach (param; parseHeaderValue(contentType).params)
+        if (param.key == "boundary")
+            return param.value;
 
-    if (idxBoundary < 0) // no boundary?
-        return null;
-
-    // check whether the 'boundary' keyword isn't actually part of another word
-    if (idxBoundary != 0)
-        if ((contentType[idxBoundary - 1] != ' ') && (contentType[idxBoundary - 1] != ';'))
-            return determineMultipartBoundary(contentType[idxBoundary + 1 .. $]);
-
-    // determine start of boundary value
-    size_t idxStartOfBoundaryValue = (idxBoundary + keywordBoundary.length);
-    char endOfBoundary = ' ';
-
-    // is it quoted?
-    if (contentType[idxStartOfBoundaryValue] == '"')
-    {
-        idxStartOfBoundaryValue += 1;
-        endOfBoundary = '"';
-    }
-
-    // determine end
-    ptrdiff_t idxEndOfBoundary = contentType.indexOf(endOfBoundary, idxStartOfBoundaryValue);
-    if (idxEndOfBoundary < 0)
-    {
-        if (endOfBoundary == '"')
-            return null;
-
-        idxEndOfBoundary = contentType.indexOf(';', idxStartOfBoundaryValue);
-        if (idxEndOfBoundary < 0)
-            idxEndOfBoundary = contentType.length;
-    }
-
-    // slice value
-    return contentType[idxStartOfBoundaryValue .. idxEndOfBoundary];
+    return null;
 }
 
 unittest
@@ -340,7 +307,7 @@ unittest
     assert(determineMultipartBoundary(`multipart/form-data; boundary="something" `) == "something");
     assert(determineMultipartBoundary(`multipart/form-data; boundary="something" z4`) == "something");
     assert(determineMultipartBoundary(
-            `multipart/form-data; oachkatzl=schwoaf boundary="something"`) == "something");
+            `multipart/form-data; oachkatzl=schwoaf boundary="something"`) is null);
     assert(determineMultipartBoundary(
             `multipart/form-data; boundary="something" oachkatzl="schwoaf"`) == "something");
     assert(determineMultipartBoundary(`multipart/form-data;oachkatzl="schwoaf"`) is null);
@@ -348,12 +315,11 @@ unittest
     assert(determineMultipartBoundary(`multipart/form-data;boundary="some;thing"`) == "some;thing");
     assert(determineMultipartBoundary(
             `multipart/form-data;boundary=some0thing;party`) == "some0thing");
-    assert(determineMultipartBoundary(`boundary=_1234_`) == "_1234_");
-    assert(determineMultipartBoundary(`boundary=----z-1234`) == "----z-1234");
-    assert(determineMultipartBoundary(`boundary="----z-1234"`) == "----z-1234");
+    assert(determineMultipartBoundary(`boundary=_1234_`) is null);
+    assert(determineMultipartBoundary(`multipart/form-data; boundary=----z-1234`) == "----z-1234");
+    assert(determineMultipartBoundary(`multipart/form-data; boundary="----z-1234"`) == "----z-1234");
     assert(determineMultipartBoundary(`multipart/form-data; coboundary=b0undary`) is null);
     assert(determineMultipartBoundary(
             `multipart/form-data; coboundary=b0undary; boundary="boundary"`) == "boundary");
-    // FIXME: bug
-    //assert(determineMultipartBoundary(`multipart/form-data; garbage="a=b boundary=xyz"; boundary="sth"`) == "sth");
+    assert(determineMultipartBoundary(`multipart/form-data; garbage="a=b boundary=xyz"; boundary="sth"`) == "sth");
 }

@@ -228,7 +228,7 @@ struct HeaderValueParamsParser
         // no data (value) left?
         if (_input.length == 0)
         {
-            // key is set, keep the empty value
+            // key is set already, keep the empty value
             return;
         }
 
