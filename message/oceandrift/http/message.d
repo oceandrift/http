@@ -883,6 +883,16 @@ struct MultiBuffer
         size_t _bufferListUsedLength = 0;
     }
 
+    this(hstring initialContent)
+    {
+        this.append(initialContent);
+    }
+
+    this(hbuffer initialContent)
+    {
+        this.append(initialContent);
+    }
+
     /++
         Current capacity of the internal buffer list
 
@@ -1118,6 +1128,13 @@ struct MultiBufferView
         return advanceFront();
     }
 
+    ///
+    MultiBufferView save() @nogc
+    {
+        return this;
+    }
+
+    ///
     ubyte opIndex(size_t index) @nogc
     {
         // start scanning from the current position in the current buffer
@@ -1144,6 +1161,7 @@ struct MultiBufferView
         assert(false, "Out of range");
     }
 
+    ///
     const(ubyte)[] opSlice(size_t start, size_t end)
     {
         if (end < start)
@@ -1165,7 +1183,7 @@ struct MultiBufferView
             immutable size_t nextEnd = end - _currentBuffer.length;
 
             // copy & advance
-            MultiBufferView clone = this;
+            MultiBufferView clone = this.save();
             clone._currentBuffer = []; // skip current buffer
             clone.advanceFront();
 
@@ -1185,7 +1203,7 @@ struct MultiBufferView
         immutable size_t elementsFromFirstBuffer = _currentBuffer.length - start;
         wholeOutputBuffer[0 .. elementsFromFirstBuffer] = _currentBuffer[start .. $];
 
-        MultiBufferView clone = this;
+        MultiBufferView clone = this.save();
         ubyte[] outputBuffer = wholeOutputBuffer[elementsFromFirstBuffer .. $];
 
         do
@@ -1213,9 +1231,10 @@ struct MultiBufferView
         return wholeOutputBuffer;
     }
 
+    ///
     size_t length() @nogc
     {
-        MultiBufferView clone = this;
+        MultiBufferView clone = this.save();
 
         size_t total = 0;
         while (!clone.empty)
@@ -1228,6 +1247,7 @@ struct MultiBufferView
         return total;
     }
 
+    ///
     size_t opDollar() @nogc
     {
         return this.length;

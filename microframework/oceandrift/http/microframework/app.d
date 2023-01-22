@@ -3,7 +3,7 @@ module oceandrift.http.microframework.app;
 import oceandrift.http.microframework.router;
 import oceandrift.http.server;
 
-public import oceandrift.http.message : Request, Response;
+public import oceandrift.http.message : hbuffer, hstring, Request, Response;
 public import oceandrift.http.microframework.form;
 public import oceandrift.http.microframework.html;
 public import oceandrift.http.microframework.kvp;

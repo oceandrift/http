@@ -2,7 +2,7 @@ import oceandrift.http.microframework.app;
 
 // listen on port 8080
 static immutable listenOn = [
-    Socket(8080, "::1"), // IPv6 loopback address
+    Socket(8080, "::1"),       // IPv6 loopback address
     Socket(8080, "127.0.0.1"), // IPv4 loopback address
 ];
 
@@ -95,7 +95,14 @@ int main() @safe
                         Message:
                         <input type="text" name="message" required />
                     </label>
-                    <input type="submit" value="Submit (POST)"/>
+                    <input type="submit" value="Submit (POST; application/x-www-form-urlencoded)"/>
+                </form>
+                <form method="POST" action="/form" enctype="multipart/form-data">
+                    <label>
+                        Message:
+                        <input type="text" name="message" required />
+                    </label>
+                    <input type="submit" value="Submit (POST; multipart/form-data)"/>
                 </form>
                 </body></html>`
             );
@@ -113,7 +120,7 @@ int main() @safe
             if (message.length == 0)
             {
                 // no or empty “message” parameter
-                response.body_.write("Bad request, no or empty “message” parameter");
+                response.body_.write("Bad request, no or empty 'message' parameter");
                 return response.withStatus(400);
             }
 

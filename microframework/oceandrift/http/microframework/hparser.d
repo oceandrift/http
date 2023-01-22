@@ -377,6 +377,47 @@ unittest
 
 unittest
 {
+    // Might change in the future
+    auto hvp = parseHeaderValueParams(`a=`);
+    assert(!hvp.empty);
+    assert(hvp.front == KeyValuePair("a", null));
+}
+
+unittest
+{
+    // Might change in the future
+    auto hvp = parseHeaderValueParams(`a=;b`);
+    assert(!hvp.empty);
+    assert(hvp.front == KeyValuePair("a", null));
+    hvp.popFront();
+    assert(!hvp.empty);
+    assert(hvp.front == KeyValuePair("b", null));
+    hvp.popFront();
+    assert(hvp.empty);
+}
+
+unittest
+{
+    // Might change in the future
+    auto hvp = parseHeaderValueParams(`=a`);
+    assert(!hvp.empty);
+    assert(hvp.front == KeyValuePair(null, "a"));
+}
+
+unittest
+{
+    // Might change in the future
+
+    // This case can be unexpected
+    // but is probably logical to keep this way.
+    // When key or value is exclusively empty, the param is not skipped either.
+    auto hvp = parseHeaderValueParams(`=`);
+    assert(!hvp.empty);
+    assert(hvp.front == KeyValuePair(null, null));
+}
+
+unittest
+{
     HeaderValueParamsParser hvp;
     assert(hvp.empty);
 }

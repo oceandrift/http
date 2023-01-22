@@ -9,6 +9,7 @@ import oceandrift.http.microframework.uri;
 
 public import oceandrift.http.message : hstring;
 public import oceandrift.http.microframework.kvp;
+import oceandrift.http.microframework.multipart;
 
 @safe pure nothrow:
 
@@ -199,6 +200,8 @@ private
 +/
 KeyValuePair[] formData(Request request)
 {
+    import std.string : startsWith;
+
     hstring[] contentType = request.getHeader!"Content-Type";
     if (contentType.length == 0)
         return null;
@@ -207,7 +210,8 @@ KeyValuePair[] formData(Request request)
     if (contentType[0] == contentTypeURLEncoded)
         return parseFormDataURLEncoded(request.body_.toString());
 
-    if (contentType[0][0 .. contentTypeMultipart.length] == contentTypeMultipart)
+    // multipart form?
+    if (contentType[0].startsWith(contentTypeMultipart))
         return parseFormDataMultipart(contentType[0], request.body_);
 
     return null;
@@ -250,5 +254,32 @@ KeyValuePair[] parseFormDataURLEncoded(hstring bodyData)
 
 KeyValuePair[] parseFormDataMultipart(const hstring contentType, ref MultiBuffer body)
 {
-    assert(false, "Not implemented");
+
+    hstring boundary = determineMultipartBoundary(contentType);
+    auto multipart = parseMultipart(body, boundary);
+
+    KeyValuePair[] output = [];
+    foreach (MultipartFile mpf; multipart)
+        if (mpf.contentDisposition.main == "form-data")
+            output ~= KeyValuePair(mpf.formDataName, cast(hstring) mpf.data);
+
+    return output;
+}
+
+/++
+    Name
+
+    $(PITFALL
+        Might not be unique.
+    )
+
+    Standards:
+        See RFC 7578, 4.3. “Multiple Files for One Form Field”
+ +/
+private hstring formDataName(MultipartFile file) @nogc
+{
+    foreach (ref param; file.contentDisposition.params)
+        if (param.key == "name")
+            return param.value;
+    return null;
 }
