@@ -8,7 +8,7 @@ dub test :microframework || exit
 cd examples
 
 cd server
-dub build || exit
+dub build --build=plain || exit
 
 cd ../microframework
-dub build || exit
+dub build --build=plain || exit

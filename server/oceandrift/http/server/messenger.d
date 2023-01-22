@@ -138,10 +138,7 @@ int parseRequest(TCPConnection connection, out Request request) //int parseReque
             buffer = new ubyte[](contentLengthLeft);
 
             try
-            {
-                immutable size_t bytesRead = connection.read(buffer, IOMode.all);
-                assert(contentLengthLeft == bytesRead);
-            }
+                connection.read(buffer, IOMode.all);
             catch (Exception ex)
                 return 408;
 
@@ -187,6 +184,7 @@ void sendResponse(TCPConnection connection, Response response)
     connection.write(CRLF);
     foreach (data; response.body_)
         connection.write(data);
+
     connection.flush();
 }
 

@@ -5,11 +5,11 @@ module oceandrift.http.microframework.form;
 
 import std.string : indexOf;
 import oceandrift.http.message : MultiBuffer, Request;
+import oceandrift.http.microframework.multipart;
 import oceandrift.http.microframework.uri;
 
 public import oceandrift.http.message : hstring;
 public import oceandrift.http.microframework.kvp;
-import oceandrift.http.microframework.multipart;
 
 @safe pure nothrow:
 
