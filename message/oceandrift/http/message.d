@@ -884,7 +884,7 @@ struct MultiBuffer
     }
 
     /++
-        Current capacity of the list
+        Current capacity of the internal buffer list
 
         $(TIP
             Probably not what you were looking for.
@@ -980,10 +980,12 @@ struct MultiBuffer
         return length;
     }
 
+    deprecated("Use .toArray() instead") alias data = toArray;
+
     /++
         Allocates a new “big” buffer containing all data from all linked buffers
      +/
-    immutable(ubyte)[] data() inout
+    immutable(ubyte)[] toArray() inout
     {
         ubyte[] output = new ubyte[](this.dataLength);
 
@@ -1073,11 +1075,11 @@ unittest
 }
 
 /++
-    Access MultiBuffers as if they were single buffers
+    Access MultiBuffers as if they were a single continuous buffer
  +/
 struct MultiBufferView
 {
-@safe pure nothrow @nogc:
+@safe pure nothrow:
 
     private
     {
@@ -1086,7 +1088,7 @@ struct MultiBufferView
     }
 
     ///
-    this(MultiBuffer mb)
+    this(MultiBuffer mb) @nogc
     {
         _mb = mb;
 
@@ -1098,25 +1100,25 @@ struct MultiBufferView
     }
 
     ///
-    bool empty()
+    bool empty() @nogc
     {
         return _mb.empty;
     }
 
     ///
-    ubyte front()
+    ubyte front() @nogc
     {
         return _currentBuffer[0];
     }
 
     ///
-    void popFront()
+    void popFront() @nogc
     {
         _currentBuffer = _currentBuffer[1 .. $];
         return advanceFront();
     }
 
-    ubyte opIndex(size_t index)
+    ubyte opIndex(size_t index) @nogc
     {
         // start scanning from the current position in the current buffer
         if (index < _currentBuffer.length)
@@ -1142,7 +1144,96 @@ struct MultiBufferView
         assert(false, "Out of range");
     }
 
-    private void advanceFront()
+    const(ubyte)[] opSlice(size_t start, size_t end)
+    {
+        if (end < start)
+            assert(false, "Slice has a larger lower index than upper index");
+
+        // Is the requested slice continuously contained in the current buffer?
+        if (end <= _currentBuffer.length)
+            return _currentBuffer[start .. end];
+
+        // No
+
+        // Is the start of the requested slice beyond the current buffer?
+        if (start >= _currentBuffer.length)
+        {
+            // advance a copy of this view to the next buffer and recursively recheck
+
+            // calculate new indices
+            immutable size_t nextStart = start - _currentBuffer.length;
+            immutable size_t nextEnd = end - _currentBuffer.length;
+
+            // copy & advance
+            MultiBufferView clone = this;
+            clone._currentBuffer = []; // skip current buffer
+            clone.advanceFront();
+
+            if (clone.empty)
+                assert(false, "Slice out of range");
+
+            return clone.opSlice(nextStart, nextEnd);
+        }
+
+        // Memory allocation needed
+
+        // Allocate buffer
+        immutable size_t outputSize = end - start;
+        ubyte[] wholeOutputBuffer = new ubyte[](outputSize);
+
+        // Copy element from _currentBuffer to the new outputBuffer
+        immutable size_t elementsFromFirstBuffer = _currentBuffer.length - start;
+        wholeOutputBuffer[0 .. elementsFromFirstBuffer] = _currentBuffer[start .. $];
+
+        MultiBufferView clone = this;
+        ubyte[] outputBuffer = wholeOutputBuffer[elementsFromFirstBuffer .. $];
+
+        do
+        {
+            // Advance clone to its next internal buffer
+            clone._currentBuffer = [];
+            clone.advanceFront();
+
+            // Clone already empty?
+            if (clone.empty)
+                assert(false, "Slice out of range");
+
+            // Determine how many bytes to copy
+            immutable size_t idxCopyEnd = (outputBuffer.length < clone._currentBuffer.length)
+                ? outputBuffer.length : clone._currentBuffer.length;
+
+            // Copy
+            outputBuffer[0 .. idxCopyEnd] = clone._currentBuffer[0 .. idxCopyEnd];
+
+            // Advance output buffer slice
+            outputBuffer = outputBuffer[idxCopyEnd .. $];
+        }
+        while (outputBuffer.length > 0);
+
+        return wholeOutputBuffer;
+    }
+
+    size_t length() @nogc
+    {
+        MultiBufferView clone = this;
+
+        size_t total = 0;
+        while (!clone.empty)
+        {
+            total += clone._currentBuffer.length;
+            clone._currentBuffer = [];
+            clone.advanceFront();
+        }
+
+        return total;
+    }
+
+    size_t opDollar() @nogc
+    {
+        return this.length;
+    }
+
+    private void advanceFront() @nogc
     {
         while (_currentBuffer.length == 0)
         {
@@ -1222,4 +1313,71 @@ unittest
 
     mbv.popFront();
     assert(mbv.empty);
+}
+
+///
+unittest
+{
+    auto mb = MultiBuffer();
+    mb.write("1234");
+
+    auto mbv = MultiBufferView(mb);
+    assert(mbv.length == 4);
+
+    assert(mbv[0 .. 1] == "1");
+    assert(mbv[1 .. 2] == "2");
+    assert(mbv[1 .. 3] == "23");
+    assert(mbv[1 .. 4] == "234");
+    assert(mbv[0 .. 4] == "1234");
+
+    mbv.popFront();
+    assert(mbv.length == 3);
+    mbv.popFront();
+    assert(mbv.length == 2);
+    mbv.popFront();
+    assert(mbv.length == 1);
+    mbv.popFront();
+    assert(mbv.length == 0);
+    assert(mbv.empty);
+    assert(mbv[0 .. $] == []);
+}
+
+///
+unittest
+{
+    auto mb = MultiBuffer();
+    mb.write("0123", "4567");
+
+    auto mbv = MultiBufferView(mb);
+    assert(mbv.length == 8);
+
+    assert(mbv[0 .. 4] == "0123");
+    assert(mbv[4 .. 6] == "45");
+    assert(mbv[5 .. 8] == "567");
+
+    // these will allocate:
+    assert(mbv[2 .. 5] == "234");
+    assert(mbv[0 .. 8] == "01234567");
+    assert(mbv[3 .. 5] == "34");
+}
+
+///
+unittest
+{
+    auto mb = MultiBuffer();
+    mb.write("0123", "4567", "89");
+
+    auto mbv = MultiBufferView(mb);
+    assert(mbv.length == mb.dataLength);
+
+    assert(mbv[0 .. 8] == "01234567");
+    assert(mbv[0 .. 9] == "012345678");
+    assert(mbv[3 .. 9] == "345678");
+    assert(mbv[7 .. 9] == "78");
+    assert(mbv[4 .. 10] == "456789");
+    assert(mbv[4 .. $] == "456789");
+
+    mbv.popFront();
+    assert(mbv.length == 9);
+    assert(mbv[0 .. 8] == "12345678");
 }
