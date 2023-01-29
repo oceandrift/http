@@ -13,6 +13,8 @@ public import oceandrift.http.microframework.kvp;
 
 @safe pure nothrow:
 
+// TODO: range version
+
 /++
     Parses a query component
 
@@ -186,6 +188,16 @@ unittest
 KeyValuePair[] queryParams(const Request request)
 {
     return parseQueryStringFromURL(request.uri);
+}
+
+KeyValuePair[] queryParamsData(const Request request)
+{
+    KeyValuePair[] params = request.queryParams;
+
+    foreach (ref KeyValuePair kvp; params)
+        kvp.value = urlDecode(kvp.value).toHString;
+
+    return params;
 }
 
 private

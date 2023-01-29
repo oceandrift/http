@@ -956,7 +956,10 @@ struct MultiBuffer
     {
         static foreach (buffer; buffers)
         {
-            static assert(__traits(compiles, (typeof(buffer) b) => cast(hbuffer) b), "Incompatible buffer type");
+            static assert(
+                __traits(compiles, (typeof(buffer) b) => cast(hbuffer) b),
+                "Incompatible buffer type: `" ~ typeof(buffer).stringof ~ '`'
+            );
             this.append(buffer);
         }
     }

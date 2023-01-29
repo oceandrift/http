@@ -95,14 +95,14 @@ int main() @safe
                         Message:
                         <input type="text" name="message" required />
                     </label>
-                    <input type="submit" value="Submit (POST; application/x-www-form-urlencoded)"/>
+                    <input type="submit" value="Submit (POST; application/x-www-form-urlencoded)" />
                 </form>
                 <form method="POST" action="/form" enctype="multipart/form-data">
                     <label>
                         Message:
                         <input type="text" name="message" required />
                     </label>
-                    <input type="submit" value="Submit (POST; multipart/form-data)"/>
+                    <input type="submit" value="Submit (POST; multipart/form-data)" />
                 </form>
                 </body></html>`
             );
