@@ -1,8 +1,8 @@
 name "oceandrift-http"
 description "HTTP application server"
 
-copyright "Copyright © 2022  Elias Batek"
-license "MIT"
+copyright "Copyright © 2022-2023  Elias Batek"
+license "BSL-1.0"
 
 authors "Elias Batek (0xEAB)"
 
