@@ -9,6 +9,8 @@ public import oceandrift.http.microframework.html;
 public import oceandrift.http.microframework.kvp;
 public import oceandrift.http.microframework.router : Router, RoutedRequestHandler, RouteMatchMeta;
 public import oceandrift.http.microframework.uri;
+public import oceandrift.http.microframework.validation;
+public import std.conv : to;
 
 @safe:
 

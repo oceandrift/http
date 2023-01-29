@@ -38,4 +38,5 @@ subPackage {
     importPaths "microframework/"
     sourcePaths "microframework/"
     dependency "oceandrift-http:server" version="*"
+    dependency "oceandrift-validation" version="~>0.2"
 }

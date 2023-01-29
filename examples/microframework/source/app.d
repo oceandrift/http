@@ -138,5 +138,74 @@ int main() @safe
 
             return response;
         });
+
+        // GET /validate
+        router.get("/validate", delegate(Request request, Response response) {
+            struct MyData
+            {
+                import oceandrift.validation.constraints;
+
+                @isSet
+                @notEmpty
+                @isUnicode
+                @maxLength(64)
+                hstring message;
+
+                @isSet
+                long number;
+            }
+
+            response.body_.write(
+                `<!DOCTYPE html><html><body><h1>oceandrift/http</h1>
+                <p>Microframework 'input validation' example</p>
+                    <h2>Input Form</h2>
+                    <form method="GET" action="/validate">
+                        <label style="display: block">
+                            Message
+                            <textarea name="message"></textarea>
+                        </label>
+                        <label style="display: block">
+                            Number
+                            <input type="text" name="number" />
+                        </label>
+                        <input type="submit" value="Submit" />
+                    </form>`);
+
+            KeyValuePair[] queryParams = request.queryParamsData;
+
+            // any query parameters provided?
+            if (queryParams.length == 0)
+            {
+                // no query params, so no need to validate anything
+                response.body_.write(`</body></html>`);
+                return response;
+            }
+
+            auto validationResult = queryParams.validateFormData!MyData();
+
+            if (!validationResult.ok)
+            {
+                // validation failed
+                // print a pretty error message
+                response.body_.write(`<h2 style="color: #F00">Validation failed</h2><p>Bad request</p><ul>`);
+                foreach (e; validationResult.errors)
+                    response.body_.write(`<li>`, e.field, ": ", e.message, `</li>`);
+                response.body_.write(`</ul>`);
+
+                return response.withStatus(400);
+            }
+
+            MyData validData = validationResult.data;
+
+            response.body_.write(
+                `<h2>Validated User Message</h2><pre style="background:#EEE">`,
+                htmlEscape(validData.message).toHString, // always escape non-HTML data
+                `</pre><h2>Validated Number</h2><pre style="background:#EEE">`,
+                htmlEscape(validData.number.to!string).toHString,
+                `</pre></body></html>`,
+            );
+
+            return response;
+        });
     });
 }
