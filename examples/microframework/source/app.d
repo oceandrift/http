@@ -207,5 +207,23 @@ int main() @safe
 
             return response;
         });
+
+        router.get("/middleware",  delegate(Request request, Response response) {
+            // regular request handler
+            response.body_.write("Main Request Handler\n");
+            return response;
+        }).add(delegate(Request request, Response response, MiddlewareNext next, RouteMatchMeta meta) {
+            // middleware 1
+            response.body_.write("before 1\n");
+            response = next(request, response);
+            response.body_.write("after 1\n");
+            return response;
+        }).add(delegate(Request request, Response response, MiddlewareNext next, RouteMatchMeta meta) {
+            // middleware 2
+            response.body_.write("before 2\n");
+            response = next(request, response);
+            response.body_.write("after 2\n");
+            return response;
+        });
     });
 }

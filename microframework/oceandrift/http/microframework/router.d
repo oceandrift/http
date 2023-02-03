@@ -21,7 +21,8 @@ Server bootWithRouter(out Router router)
 alias MiddlewareRequestHandler = Response delegate(
     Request request,
     Response response,
-    RequestHandler next,
+    MiddlewareNext next,
+    RouteMatchMeta meta,
 ) @safe;
 
 alias MethodNotAllowedHandler = Response delegate(
@@ -39,23 +40,97 @@ enum HTTPMethod
     put,
 }
 
+/++
+    ---
+    delegate(Request request, Response response, MiddlewareNext next, RouteMatchMeta) @safe {
+        // […] do something before
+
+        // call “next” request handler
+        response = next(request, response);
+
+        // […] do something after
+
+        return response;
+    }
+    ---
+ +/
+struct MiddlewareNext
+{
+    private
+    {
+        size_t _n;
+        MiddlewareRequestHandler[] _middleware;
+        RequestHandler _next;
+        RoutedRequestHandler _nextR;
+        RouteMatchMeta _meta;
+    }
+
+    @disable this();
+
+    private this(
+        MiddlewareRequestHandler[] middleware,
+        RequestHandler next,
+        RoutedRequestHandler nextR,
+        RouteMatchMeta meta,
+    )
+    {
+        _middleware = middleware;
+        _next = next;
+        _nextR = nextR;
+        _meta = meta;
+    }
+
+    public Response opCall(Request request, Response response)
+    {
+        if (_middleware.length == 0)
+            return (_next !is null) ? _next(request, response) : _nextR(request, response, _meta);
+
+        immutable mw = _middleware[0];
+        _middleware = _middleware[1 .. $];
+
+        return mw(request, response, this, _meta);
+    }
+}
+
 struct MiddlewareCollection
 {
-    MiddlewareRequestHandler[] middleware = [];
+@safe:
+
+    private {
+        MiddlewareRequestHandler[] _middleware = [];
+    }
+
+    Response handleRequest(
+        Request request,
+        Response response,
+        RequestHandler next,
+        RoutedRequestHandler nextR,
+        RouteMatchMeta meta,
+    )
+    {
+        auto mwn = MiddlewareNext(_middleware, next, nextR, meta);
+        return mwn(request, response);
+    }
+
+    void add(MiddlewareRequestHandler middleware)
+    {
+        _middleware ~= middleware;
+    }
 }
 
 final class Route
 {
 @safe:
 
-    Route add()
+    Route add(MiddlewareRequestHandler middleware)
     {
+        _middleware.add(middleware);
         return this;
     }
 
     Response handleRequest(Request request, Response response, RouteMatchMeta meta)
     {
-        return (_target !is null) ? _target(request, response) : _targetR(request, response, meta);
+        return _middleware.handleRequest(request, response, _target, _targetR, meta);
     }
 
 private:
@@ -65,10 +140,10 @@ private:
     {
         _target = target;
         _targetR = targetR;
-        _middleware = new MiddlewareCollection();
+        _middleware = MiddlewareCollection();
     }
 
-    MiddlewareCollection* _middleware;
+    MiddlewareCollection _middleware;
     RequestHandler _target;
     RoutedRequestHandler _targetR;
 }
