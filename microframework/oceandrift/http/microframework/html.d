@@ -1,7 +1,7 @@
 module oceandrift.http.microframework.html;
 
 import std.range : ElementType, isInputRange;
-import oceandrift.http.message : hstring;
+import oceandrift.http.message : assumeImmortal, hstring, imdup;
 
 @safe pure:
 
@@ -10,28 +10,28 @@ private
     struct Escape
     {
         char specialChar;
-        string escapeSequence;
+        hstring escapeSequence;
     }
 
     Escape[] getEscapeMap(bool escapeQuotes) nothrow
     {
         Escape[] m = [
-            Escape('&', "&amp;"),
-            Escape('<', "&lt;"),
-            Escape('>', "&gt;"),
+            Escape('&', "&amp;".imdup),
+            Escape('<', "&lt;".imdup),
+            Escape('>', "&gt;".imdup),
         ];
 
         if (escapeQuotes)
         {
-            m ~= Escape('"', "&quot;");
-            m ~= Escape('\'', "&#39;");
+            m ~= Escape('"', "&quot;".imdup);
+            m ~= Escape('\'', "&#39;".imdup);
         }
 
         return m;
     }
 }
 
-enum isHTMLEscapable(T) = (is(T == hstring) || (isInputRange!T && is(ElementType!T == char)));
+enum isHTMLEscapable(T) = (is(T == const(char)[]) || (isInputRange!T && is(ElementType!T == char)));
 
 /++
     HTML escaping implementation
@@ -39,8 +39,6 @@ enum isHTMLEscapable(T) = (is(T == hstring) || (isInputRange!T && is(ElementType
 struct HTMLEscaper(bool escapeQuotes = true, TInput) if (isHTMLEscapable!TInput)
 {
 @safe pure nothrow:
-
-    import oceandrift.http.message : empty, front, popFront;
 
     private
     {
@@ -119,7 +117,7 @@ struct HTMLEscaper(bool escapeQuotes = true, TInput) if (isHTMLEscapable!TInput)
     {
         import std.range : array;
 
-        return array(this);
+        return (const(char)[] d) @trusted { return assumeImmortal(d); }(array(this));
     }
 }
 
@@ -145,7 +143,14 @@ HTMLEscaper!(escapeQuotes, TInput) htmlEscape(bool escapeQuotes = true, TInput)(
 HTMLEscaper!(escapeQuotes, hstring) htmlEscape(bool escapeQuotes = true, TInput:
     string)(TInput input) nothrow @nogc
 {
-    return HTMLEscaper!(escapeQuotes, hstring)(cast(hstring) input);
+    return HTMLEscaper!(escapeQuotes, hstring)(hstring(input));
+}
+
+/// ditto
+HTMLEscaper!(escapeQuotes, hstring) htmlEscape(bool escapeQuotes = true, TInput:
+    const(char)[])(TInput input) nothrow @nogc
+{
+    return HTMLEscaper!(escapeQuotes, hstring)(hstring(input));
 }
 
 unittest

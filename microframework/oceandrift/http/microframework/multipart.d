@@ -41,7 +41,7 @@ struct MultipartFile
     HeaderValue contentDisposition;
 
     ///
-    HeaderValue contentType = HeaderValue("text/plain");
+    HeaderValue contentType = HeaderValue("text/plain".imdup);
 
     /++
         Content-Transfer-Encoding
@@ -57,7 +57,7 @@ struct MultipartFile
     hbuffer data;
 }
 
-bool popCompare(ref MultiBufferView range, hbuffer expected) @nogc
+bool popCompare(ref MultiBufferView range, const(ubyte)[] expected) @nogc
 {
     while (expected.length > 0)
     {
@@ -74,9 +74,9 @@ bool popCompare(ref MultiBufferView range, hbuffer expected) @nogc
     return true;
 }
 
-bool popCompare(ref MultiBufferView range, hstring expected) @nogc
+bool popCompare(ref MultiBufferView range, const(char)[] expected) @nogc
 {
-    return popCompare(range, cast(hbuffer) expected);
+    return popCompare(range, cast(const(ubyte)[]) expected);
 }
 
 unittest
@@ -96,6 +96,12 @@ unittest
 MultipartParser parseMultipart(MultiBuffer rawMultipartData, hstring boundary)
 {
     return MultipartParser(rawMultipartData, boundary);
+}
+
+/// ditto
+MultipartParser parseMultipart(MultiBuffer rawMultipartData, const(char)[] boundary)
+{
+    return parseMultipart(rawMultipartData, hstring(boundary));
 }
 
 unittest
@@ -119,7 +125,7 @@ unittest
     mpp.front.contentDisposition.params.popFront();
     assert(mpp.front.contentDisposition.params.empty);
 
-    assert(mpp.front.contentTransferEncoding.main is null);
+    assert(mpp.front.contentTransferEncoding.main.data is null);
     assert(mpp.front.contentTransferEncoding.params.empty);
 
     assert(mpp.front.contentType.main == "text/plain");
@@ -368,7 +374,7 @@ struct MultipartParser
             return;
         }
 
-        if (!_data.popCompare(_boundary)) // invalid?
+        if (!_data.popCompare(_boundary.data)) // invalid?
         {
             _empty = true;
             return;
@@ -416,10 +422,13 @@ struct MultipartParser
         // pop header
         foreach (idx; 0 .. headers.bytesRead)
             _data.popFront(); // determine end of body
+
         immutable ptrdiff_t idxEndOfBody = _data.countUntil(
-            (cast(hbuffer) delimiterPrefix)
-                .chain(cast(hbuffer) _boundary)
-        ); // no end marker?
+            (cast(const(ubyte)[]) delimiterPrefix)
+                .chain(cast(const(ubyte)[])(_boundary.data))
+        );
+
+        // no end marker?
         if (idxEndOfBody < 0)
         {
             // faulty data
@@ -476,7 +485,7 @@ private hstring nameFromContentDisposition(
             contentDisposition).params)
         if (param.key == "name")
             return param.value;
-    return null;
+    return hstring(null);
 }
 
 hstring determineMultipartBoundary(const hstring contentType) @nogc
@@ -486,7 +495,12 @@ hstring determineMultipartBoundary(const hstring contentType) @nogc
     foreach (param; parseHeaderValue(contentType).params)
         if (param.key == "boundary")
             return param.value;
-    return null;
+    return hstring(null);
+}
+
+hstring determineMultipartBoundary(const const(char)[] contentType) @nogc
+{
+    return determineMultipartBoundary(hstring(contentType));
 }
 
 unittest
@@ -504,25 +518,25 @@ unittest
     assert(determineMultipartBoundary(
             `multipart/form-data; boundary="something" z4`) == "something");
     assert(determineMultipartBoundary(
-            `multipart/form-data; oachkatzl=schwoaf boundary="something"`) is null);
+            `multipart/form-data; oachkatzl=schwoaf boundary="something"`).data is null);
     assert(determineMultipartBoundary(
             `multipart/form-data; boundary="something" oachkatzl="schwoaf"`) == "something");
     assert(determineMultipartBoundary(
-            `multipart/form-data;oachkatzl="schwoaf"`) is null);
+            `multipart/form-data;oachkatzl="schwoaf"`).data is null);
     assert(determineMultipartBoundary(
-            `multipart/form-data;oachkatzl=schwoaf;party`) is null);
+            `multipart/form-data;oachkatzl=schwoaf;party`).data is null);
     assert(determineMultipartBoundary(
             `multipart/form-data;boundary="some;thing"`) == "some;thing");
     assert(determineMultipartBoundary(
             `multipart/form-data;boundary=some0thing;party`) == "some0thing");
     assert(determineMultipartBoundary(
-            `boundary=_1234_`) is null);
+            `boundary=_1234_`).data is null);
     assert(determineMultipartBoundary(
             `multipart/form-data; boundary=----z-1234`) == "----z-1234");
     assert(determineMultipartBoundary(
             `multipart/form-data; boundary="----z-1234"`) == "----z-1234");
     assert(determineMultipartBoundary(
-            `multipart/form-data; coboundary=b0undary`) is null);
+            `multipart/form-data; coboundary=b0undary`).data is null);
     assert(determineMultipartBoundary(
             `multipart/form-data; coboundary=b0undary; boundary="boundary"`) == "boundary");
     assert(determineMultipartBoundary(

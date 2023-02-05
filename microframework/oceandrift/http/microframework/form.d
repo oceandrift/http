@@ -35,10 +35,16 @@ KeyValuePair parseQueryComponent(hstring rawQueryComponent) @nogc
 
     // dfmt off
     return (eq < 0)
-        ? KeyValuePair(rawQueryComponent, null)
+        ? KeyValuePair(rawQueryComponent, hstring(null))
         : KeyValuePair(rawQueryComponent[0 .. eq], rawQueryComponent[(eq + 1) .. $])
     ;
     // dfmt on
+}
+
+/// ditto
+KeyValuePair parseQueryComponent(const(char)[] rawQueryComponent) @nogc
+{
+    return parseQueryComponent(hstring(rawQueryComponent));
 }
 
 ///
@@ -48,9 +54,9 @@ unittest
     assert(parseQueryComponent("foo=bar") == KeyValuePair("foo", "bar"));
 
     // Key only, no value
-    assert(parseQueryComponent("foo") == KeyValuePair("foo", null));
+    assert(parseQueryComponent("foo") == KeyValuePair("foo", hstring(null)));
     assert(parseQueryComponent("foo") == KeyValuePair("foo", ""));
-    assert(parseQueryComponent("foo=") == KeyValuePair("foo", null));
+    assert(parseQueryComponent("foo=") == KeyValuePair("foo", hstring(null)));
 
     // bogus
     assert(parseQueryComponent("=") == KeyValuePair(null, null));
@@ -98,6 +104,12 @@ KeyValuePair[] parseQueryString(const hstring queryString)
     while (true);
 
     return output;
+}
+
+/// ditto
+KeyValuePair[] parseQueryString(const const(char)[] queryString)
+{
+    return parseQueryString(hstring(queryString));
 }
 
 ///
@@ -156,6 +168,11 @@ unittest
 KeyValuePair[] parseQueryStringFromURL(const hstring url)
 {
     return parseQueryString(url.query);
+}
+
+KeyValuePair[] parseQueryStringFromURL(const const(char)[] url)
+{
+    return parseQueryStringFromURL(hstring(url));
 }
 
 ///
@@ -220,7 +237,7 @@ KeyValuePair[] formData(Request request)
 
     // form urlencoded?
     if (contentType[0] == contentTypeURLEncoded)
-        return parseFormDataURLEncoded(request.body_.toString());
+        return parseFormDataURLEncoded(request.body_.toHString());
 
     // multipart form?
     if (contentType[0].startsWith(contentTypeMultipart))
@@ -241,7 +258,7 @@ bool tryGetFormData(Request request, out KeyValuePair[] formData)
     // form urlencoded?
     if (contentType[0] == contentTypeURLEncoded)
     {
-        formData = parseFormDataURLEncoded(request.body_.toString());
+        formData = parseFormDataURLEncoded(request.body_.toHString());
         return true;
     }
 
@@ -293,5 +310,5 @@ private hstring formDataName(MultipartFile file) @nogc
     foreach (ref param; file.contentDisposition.params)
         if (param.key == "name")
             return param.value;
-    return null;
+    return hstring(null);
 }

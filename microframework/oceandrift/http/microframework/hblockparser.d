@@ -91,7 +91,10 @@ struct HeaderBlockParser(string linebreak)
         _bytesRead += popN;
     }
 
-    auto input(){return _input;}// TODO
+    auto input()
+    {
+        return _input;
+    } // TODO
 
     ///
     size_t bytesRead() @nogc
@@ -109,7 +112,7 @@ version (unittest)
 {
     import oceandrift.http.microframework.kvp;
 
-    private bool compareHeader(Header actual, hstring expectedName, hstring expectedMain, KeyValuePair[] expectedParams)
+    private bool compareHeader(Header actual, const(char)[] expectedName, const(char)[] expectedMain, KeyValuePair[] expectedParams)
     {
         if (actual.name != expectedName)
             return false;

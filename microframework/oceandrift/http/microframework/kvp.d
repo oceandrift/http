@@ -15,6 +15,32 @@ struct KeyValuePair
 
     /// Associated value
     hstring value;
+
+@safe pure nothrow @nogc:
+
+    this(hstring key, hstring value)
+    {
+        this.key = key;
+        this.value = value;
+    }
+
+    this(const(char)[] key, const(char)[] value)
+    {
+        this.key = hstring(key);
+        this.value = hstring(value);
+    }
+
+    this(const(char)[] key, hstring value)
+    {
+        this.key = hstring(key);
+        this.value = value;
+    }
+
+    this(hstring key, const(char)[] value)
+    {
+        this.key = key;
+        this.value = hstring(value);
+    }
 }
 
 /++
@@ -67,6 +93,12 @@ hstring get(KeyValuePair[] array, hstring key, hstring substituteIfNotFound = nu
             return kvp.value;
 
     return substituteIfNotFound;
+}
+
+/// ditto
+hstring get(KeyValuePair[] array, string key, hstring substituteIfNotFound = null)
+{
+    return get(array, hstring(key), substituteIfNotFound);
 }
 
 bool empty(const KeyValuePair[] array)

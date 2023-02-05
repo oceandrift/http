@@ -327,7 +327,7 @@ private:
         if (_404 is null)
             return response.withStatus(404);
 
-        return _404(request, response);
+        return _404(request, response.withStatus(404));
     }
 
     Response handle405(Request request, Response response)

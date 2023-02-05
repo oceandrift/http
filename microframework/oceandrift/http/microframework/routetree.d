@@ -29,7 +29,7 @@
 module oceandrift.http.microframework.routetree;
 
 import std.string : indexOf;
-import oceandrift.http.message : hstring, Request, Response;
+import oceandrift.http.message : hstring, imdup, Request, Response;
 import oceandrift.http.microframework.kvp;
 
 @safe:
@@ -43,7 +43,7 @@ alias RoutedRequestHandler = Response delegate(
 ///
 struct RouteTreeLink
 {
-    string component = null;
+    hstring component = hstring(null);
     RouteTreeNode* node;
 }
 
@@ -61,10 +61,10 @@ void addRoute(RouteTreeNode* root, string url, RoutedRequestHandler requestHandl
 in (root !is null)
 in (url[0] == '/')
 {
-    return addRouteTreeNode(root, url[1 .. $], requestHandler);
+    return addRouteTreeNode(root, url[1 .. $].imdup, requestHandler);
 }
 
-private void addRouteTreeNode(RouteTreeNode* tree, string url, RoutedRequestHandler requestHandler)
+private void addRouteTreeNode(RouteTreeNode* tree, hstring url, RoutedRequestHandler requestHandler)
 {
     if (url.length == 0)
     {
@@ -98,12 +98,12 @@ private void addRouteTreeNode(RouteTreeNode* tree, string url, RoutedRequestHand
 
         // exists (no direct insert)
 
-        string component;
+        hstring component;
 
         if (endOfWildcard < 0)
         {
             component = url[0 .. $];
-            url = "";
+            url = "".imdup;
         }
         else
         {
@@ -118,8 +118,8 @@ private void addRouteTreeNode(RouteTreeNode* tree, string url, RoutedRequestHand
             || (tree.wildcard.component == "")
             ,
             "Ambiguously named route placeholder: `"
-                ~ component
-                ~ "` (already knowns as: `" ~ tree.wildcard.component ~ "`)"
+                ~ component.data
+                ~ "` (already knowns as: `" ~ tree.wildcard.component.data ~ "`)"
         );
         // dfmt on
 
@@ -132,7 +132,7 @@ private void addRouteTreeNode(RouteTreeNode* tree, string url, RoutedRequestHand
         if (branch.component[0] != url[0])
             continue;
 
-        string shorter, longer;
+        hstring shorter, longer;
         if (branch.component.length > url.length)
         {
             shorter = url;
@@ -444,6 +444,12 @@ RouteMatchResult match(RouteTreeNode* root, hstring url)
     RouteMatchResult output;
     output.requestHandler = matchRoute(root, url[1 .. $], output.meta);
     return output;
+}
+
+/// ditto
+RouteMatchResult match(RouteTreeNode* root, const(char)[] url)
+{
+    return match(root, hstring(url));
 }
 
 private RoutedRequestHandler matchRoute(RouteTreeNode* tree, hstring url, ref RouteMatchMeta routeMatchMeta)

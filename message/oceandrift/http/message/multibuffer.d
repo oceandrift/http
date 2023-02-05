@@ -1,0 +1,578 @@
+module oceandrift.http.message.multibuffer;
+
+public import oceandrift.http.message.htype;
+
+@safe pure nothrow:
+
+/++
+    List of multiple buffers
+
+    Stores slices to (potentially indepenant) buffers.
+ +/
+struct MultiBuffer
+{
+@safe pure nothrow:
+
+    private
+    {
+        enum defaultReserve = 16;
+
+        hbuffer[] _bufferList;
+        size_t _bufferListUsedLength = 0;
+    }
+
+    this(hstring initialContent)
+    {
+        this.append(initialContent);
+    }
+
+    this(hbuffer initialContent)
+    {
+        this.append(initialContent);
+    }
+
+    this(const(ubyte)[] initialContent)
+    {
+        this.append(hbuffer(initialContent));
+    }
+
+    this(const(char)[] initialContent)
+    {
+        this.append(hstring(initialContent));
+    }
+
+    /++
+        Current capacity of the internal buffer list
+
+        $(TIP
+            Probably not what you were looking for.
+        )
+
+        See_Also:
+        $(LIST
+            * dataLength – length of all data from all buffers
+            * length – number of buffers in the list
+        )
+     +/
+    size_t capacity() const @nogc
+    {
+        return _bufferList.length;
+    }
+
+    /++
+        Number of buffers
+
+        See_Also:
+            [dataLength]
+     +/
+    size_t length() const @nogc
+    {
+        return _bufferListUsedLength;
+    }
+
+    /++
+        Reserves a certain extra capacity in the list to be available without further allocations
+     +/
+    void reserve(size_t n)
+    {
+        _bufferList.length += n;
+    }
+
+    /++
+        Appends the passed buffer to the buffer list
+     +/
+    void append(hbuffer buffer)
+    {
+        this.ensureCapacity();
+
+        _bufferList[_bufferListUsedLength] = cast(hbuffer) buffer;
+        ++_bufferListUsedLength;
+    }
+
+    /// ditto
+    void append(hstring buffer)
+    {
+        return this.append(cast(hbuffer) buffer);
+    }
+
+    /// ditto
+    void append(T)(T buffer)
+            if (!is(T == hbuffer) && __traits(compiles, (T b) => hbuffer(cast(const(ubyte)[]) b)))
+    {
+        this.ensureCapacity();
+
+        _bufferList[_bufferListUsedLength] = hbuffer(cast(const(ubyte)[]) buffer);
+        ++_bufferListUsedLength;
+    }
+
+    /++
+        Allocates a new buffer, copies over the data from the passed buffer
+        and appends it the the buffer list
+     +/
+    void appendCopy(T)(T buffer)
+            if (__traits(compiles, (T b) => cast(const(ubyte)[]) b))
+    {
+        hbuffer bCopy = (cast(const(ubyte)[]) buffer).imdup;
+
+        return this.append(bCopy);
+    }
+
+    void write(Buffers...)(Buffers buffers)
+    {
+        static foreach (buffer; buffers)
+        {
+            static if (!__traits(compiles, (typeof(buffer) b) => cast(hbuffer) b))
+                static assert(
+                    __traits(compiles, (typeof(buffer) b) => hbuffer(cast(const(ubyte)[]) b)),
+                    "Incompatible buffer type: `" ~ typeof(buffer).stringof ~ '`'
+                );
+            this.append(buffer);
+        }
+    }
+
+    /++
+        Appends a buffer to the buffer list
+     +/
+    void opOpAssign(string op : "~", T)(T buffer)
+    {
+        return this.append(buffer);
+    }
+
+    /++
+        Returns:
+            The buffer at the requested position
+     +/
+    ref hbuffer opIndex(size_t index)
+    {
+        return _bufferList[index];
+    }
+
+    /++
+        Calculates the total length of all data from all linked buffers
+     +/
+    size_t dataLength() inout @nogc
+    {
+        size_t length = 0;
+        foreach (buffer; _bufferList[0 .. _bufferListUsedLength])
+            length += buffer.length;
+
+        return length;
+    }
+
+    deprecated("Use .toArray() instead") alias data = toArray;
+
+    /++
+        Allocates a new “big” buffer containing all data from all linked buffers
+     +/
+    immutable(ubyte)[] toArray() inout
+    {
+        ubyte[] output = new ubyte[](this.dataLength);
+
+        size_t i = 0;
+        foreach (buffer; _bufferList[0 .. _bufferListUsedLength])
+        {
+            output[i .. (i + buffer.length)] = buffer[0 .. $].data;
+            i += buffer.length;
+        }
+
+        return output;
+    }
+
+    /++
+        Allocates a new string containing all data from all linked buffers
+     +/
+    string toString() inout
+    {
+        return cast(string) this.toArray();
+    }
+
+    // ditto
+    hstring toHString() inout
+    {
+        return (string d) @trusted { return assumeImmortal(d); }(this.toString());
+    }
+
+    public @nogc // range
+    {
+        ///
+        bool empty() inout
+        {
+            return (_bufferListUsedLength == 0);
+        }
+
+        ///
+        hbuffer front() inout
+        {
+            return _bufferList[0];
+        }
+
+        ///
+        void popFront()
+        {
+            _bufferList = _bufferList[1 .. $];
+            --_bufferListUsedLength;
+        }
+    }
+
+private:
+
+    void ensureCapacity()
+    {
+        if (_bufferList.length != _bufferListUsedLength)
+            return;
+
+        immutable size_t toReserve = (_bufferList.length == 0)
+            ? defaultReserve : (_bufferListUsedLength + (_bufferListUsedLength / 2));
+
+        this.reserve(toReserve);
+    }
+}
+
+unittest
+{
+    MultiBuffer mb;
+    assert(mb.empty);
+    assert(mb.capacity == 0);
+    assert(mb.length == 0);
+    assert(mb.dataLength == 0);
+    assert(mb.data == []);
+
+    char[] a = ['0', '1', '2', '3'];
+    mb.appendCopy(a);
+    assert(!mb.empty);
+    assert(mb.length == 1);
+    assert(mb.capacity == mb.defaultReserve);
+    assert(mb.dataLength == a.length);
+    assert(mb.data == a);
+    a[0] = '9';
+    assert(mb.front == "0123");
+
+    char[] b = ['4', '5', '6', '7'];
+    mb.append(b);
+    assert(!mb.empty);
+    assert(mb.length == 2);
+    assert(mb.capacity == mb.defaultReserve);
+    assert(mb.dataLength == (a.length + b.length));
+    assert(mb.data == "01234567");
+
+    b[0] = '9';
+    assert(mb.data == "01239567");
+}
+
+/++
+    Access MultiBuffers as if they were a single continuous buffer
+ +/
+struct MultiBufferView
+{
+@safe pure nothrow:
+
+    private
+    {
+        MultiBuffer _mb;
+        hbuffer _currentBuffer;
+    }
+
+    ///
+    this(MultiBuffer mb) @nogc
+    {
+        _mb = mb;
+
+        if (_mb.empty)
+            return;
+
+        _currentBuffer = _mb.front;
+        advanceFront();
+    }
+
+    ///
+    bool empty() @nogc
+    {
+        return _mb.empty;
+    }
+
+    ///
+    ubyte front() @nogc
+    {
+        return _currentBuffer[0];
+    }
+
+    ///
+    void popFront() @nogc
+    {
+        _currentBuffer = _currentBuffer[1 .. $];
+        return advanceFront();
+    }
+
+    ///
+    MultiBufferView save() @nogc
+    {
+        return this;
+    }
+
+    ///
+    ubyte opIndex(size_t index) @nogc
+    {
+        // start scanning from the current position in the current buffer
+        if (index < _currentBuffer.length)
+            return _currentBuffer[index];
+
+        // not there yet, substract difference from search position
+        index -= _currentBuffer.length;
+
+        // prepare next buffer
+        MultiBuffer mb = _mb;
+        mb.popFront();
+
+        // scan buffer by buffer
+        while (!mb.empty)
+        {
+            if (index < mb.front.length)
+                return mb.front[index];
+
+            index -= mb.front.length;
+            mb.popFront();
+        }
+
+        assert(false, "Out of range");
+    }
+
+    ///
+    hbuffer opSlice(size_t start, size_t end)
+    {
+        if (end < start)
+            assert(false, "Slice has a larger lower index than upper index");
+
+        // Is the requested slice continuously contained in the current buffer?
+        if (end <= _currentBuffer.length)
+            return _currentBuffer[start .. end];
+
+        // No
+
+        // Is the start of the requested slice beyond the current buffer?
+        if (start >= _currentBuffer.length)
+        {
+            // advance a copy of this view to the next buffer and recursively recheck
+
+            // calculate new indices
+            immutable size_t nextStart = start - _currentBuffer.length;
+            immutable size_t nextEnd = end - _currentBuffer.length;
+
+            // copy & advance
+            MultiBufferView clone = this.save();
+            clone._currentBuffer.drop(); // skip current buffer
+            clone.advanceFront();
+
+            if (clone.empty)
+                assert(false, "Slice out of range");
+
+            return clone.opSlice(nextStart, nextEnd);
+        }
+
+        // Memory allocation needed
+
+        // Allocate buffer
+        immutable size_t outputSize = end - start;
+        ubyte[] wholeOutputBuffer = new ubyte[](outputSize);
+
+        // Copy element from _currentBuffer to the new outputBuffer
+        immutable size_t elementsFromFirstBuffer = _currentBuffer.length - start;
+        wholeOutputBuffer[0 .. elementsFromFirstBuffer] = _currentBuffer[start .. $].data;
+
+        MultiBufferView clone = this.save();
+        ubyte[] outputBuffer = wholeOutputBuffer[elementsFromFirstBuffer .. $];
+
+        do
+        {
+            // Advance clone to its next internal buffer
+            clone._currentBuffer.drop();
+            clone.advanceFront();
+
+            // Clone already empty?
+            if (clone.empty)
+                assert(false, "Slice out of range");
+
+            // Determine how many bytes to copy
+            immutable size_t idxCopyEnd = (outputBuffer.length < clone._currentBuffer.length)
+                ? outputBuffer.length : clone._currentBuffer.length;
+
+            // Copy
+            outputBuffer[0 .. idxCopyEnd] = clone._currentBuffer[0 .. idxCopyEnd].data;
+
+            // Advance output buffer slice
+            outputBuffer = outputBuffer[idxCopyEnd .. $];
+        }
+        while (outputBuffer.length > 0);
+
+        return (x) @trusted { return assumeImmortal(x); }(wholeOutputBuffer);
+    }
+
+    ///
+    size_t length() @nogc
+    {
+        MultiBufferView clone = this.save();
+
+        size_t total = 0;
+        while (!clone.empty)
+        {
+            total += clone._currentBuffer.length;
+            clone._currentBuffer.drop();
+            clone.advanceFront();
+        }
+
+        return total;
+    }
+
+    ///
+    size_t opDollar() @nogc
+    {
+        return this.length;
+    }
+
+    private void advanceFront() @nogc
+    {
+        while (_currentBuffer.length == 0)
+        {
+            _mb.popFront();
+
+            if (_mb.empty)
+                break;
+
+            _currentBuffer = _mb.front;
+        }
+    }
+}
+
+unittest
+{
+    auto mb = MultiBuffer();
+
+    {
+        auto mbv = MultiBufferView(mb);
+        assert(mbv.empty);
+    }
+
+    mb.write("asdf", "1234", "q", "", "0000000000!");
+
+    auto mbv = MultiBufferView(mb);
+
+    assert(mbv[0] == 'a');
+    assert(mbv[3] == 'f');
+    assert(mbv[4] == '1');
+    assert(mbv[8] == 'q');
+    assert(mbv[9] == '0');
+    assert(mbv[19] == '!');
+
+    assert(!mbv.empty);
+    assert(mbv.front == 'a');
+    mbv.popFront();
+    assert(!mbv.empty);
+    assert(mbv.front == 's');
+    mbv.popFront();
+    assert(!mbv.empty);
+    assert(mbv.front == 'd');
+    mbv.popFront();
+    assert(!mbv.empty);
+    assert(mbv.front == 'f');
+    mbv.popFront();
+    assert(!mbv.empty);
+    assert(mbv.front == '1');
+    static foreach (idx; 0 .. 4)
+        mbv.popFront();
+    assert(mbv.front == 'q');
+    mbv.popFront();
+    assert(!mbv.empty);
+    assert(mbv.front == '0');
+    static foreach (idx; 0 .. 10)
+        mbv.popFront();
+    assert(!mbv.empty);
+    assert(mbv.front == '!');
+    mbv.popFront();
+    assert(mbv.empty);
+}
+
+///
+unittest
+{
+    auto mb = MultiBuffer();
+    mb.write("", "01");
+
+    auto mbv = MultiBufferView(mb);
+    assert(!mbv.empty);
+    assert(mbv.front == '0');
+    assert(mbv[0] == '0');
+    assert(mbv[1] == '1');
+
+    mbv.popFront();
+    assert(mbv.front == '1');
+    assert(mbv[0] == '1');
+
+    mbv.popFront();
+    assert(mbv.empty);
+}
+
+///
+unittest
+{
+    auto mb = MultiBuffer();
+    mb.write("1234");
+
+    auto mbv = MultiBufferView(mb);
+    assert(mbv.length == 4);
+
+    assert(mbv[0 .. 1] == "1");
+    assert(mbv[1 .. 2] == "2");
+    assert(mbv[1 .. 3] == "23");
+    assert(mbv[1 .. 4] == "234");
+    assert(mbv[0 .. 4] == "1234");
+
+    mbv.popFront();
+    assert(mbv.length == 3);
+    mbv.popFront();
+    assert(mbv.length == 2);
+    mbv.popFront();
+    assert(mbv.length == 1);
+    mbv.popFront();
+    assert(mbv.length == 0);
+    assert(mbv.empty);
+    assert(mbv[0 .. $] == []);
+}
+
+///
+unittest
+{
+    auto mb = MultiBuffer();
+    mb.write("0123", "4567");
+
+    auto mbv = MultiBufferView(mb);
+    assert(mbv.length == 8);
+
+    assert(mbv[0 .. 4] == "0123");
+    assert(mbv[4 .. 6] == "45");
+    assert(mbv[5 .. 8] == "567");
+
+    // these will allocate:
+    assert(mbv[2 .. 5] == "234");
+    assert(mbv[0 .. 8] == "01234567");
+    assert(mbv[3 .. 5] == "34");
+}
+
+///
+unittest
+{
+    auto mb = MultiBuffer();
+    mb.write("0123", "4567", "89");
+
+    auto mbv = MultiBufferView(mb);
+    assert(mbv.length == mb.dataLength);
+
+    assert(mbv[0 .. 8] == "01234567");
+    assert(mbv[0 .. 9] == "012345678");
+    assert(mbv[3 .. 9] == "345678");
+    assert(mbv[7 .. 9] == "78");
+    assert(mbv[4 .. 10] == "456789");
+    assert(mbv[4 .. $] == "456789");
+
+    mbv.popFront();
+    assert(mbv.length == 9);
+    assert(mbv[0 .. 8] == "12345678");
+}

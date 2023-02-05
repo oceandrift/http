@@ -186,7 +186,7 @@ private bool validateImplFieldNameSwitch(bool allowExtraFields, Data)(
 {
     pragma(inline, true);
 
-    switch (kvp.key)
+    switch (kvp.key.data)
     {
         static foreach (fieldName; FieldNameTuple!Data)
         {

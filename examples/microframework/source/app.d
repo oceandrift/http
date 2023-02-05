@@ -30,7 +30,7 @@ int main() @safe
             response.body_.write("Viewing item: ");
             response.body_.write(itemFromURI);
 
-            return response.withHeader!"Content-Type"("text/plain");
+            return response.withHeader!"Content-Type"(hstring("text/plain"));
         });
 
         // GET /uri-info
@@ -54,8 +54,8 @@ int main() @safe
 
             // return response with “content-type” + “server” headers
             return response
-                .withHeader!"Content-Type"("text/plain; charset=UTF-8")
-                .withHeader!"Server"("oceandrift/http");
+                .withHeader!"Content-Type"(hstring("text/plain; charset=UTF-8"))
+                .withHeader!"Server"(hstring("oceandrift/http"));
         });
 
         // GET /form
@@ -109,8 +109,8 @@ int main() @safe
 
             // return response with “content-type” + “server” headers
             return response
-                .withHeader!"Content-Type"("text/html; charset=UTF-8")
-                .withHeader!"Server"("oceandrift/http");
+                .withHeader!"Content-Type"(hstring("text/html; charset=UTF-8"))
+                .withHeader!"Server"(hstring("oceandrift/http"));
         });
 
         // POST /form
@@ -149,7 +149,7 @@ int main() @safe
                 @notEmpty
                 @isUnicode
                 @maxLength(64)
-                hstring message;
+                const(char)[] message;
 
                 @isSet
                 long number;

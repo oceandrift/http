@@ -49,6 +49,12 @@ Header parseHeader(hstring raw)
     );
 }
 
+/// ditto
+Header parseHeader(const(char)[] raw)
+{
+    return parseHeader(hstring(raw));
+}
+
 ///
 unittest
 {
@@ -108,6 +114,11 @@ HeaderValue parseHeaderValue(hstring raw)
     );
 }
 
+HeaderValue parseHeaderValue(const(char)[] raw)
+{
+    return parseHeaderValue(hstring(raw));
+}
+
 unittest
 {
     HeaderValue hv = parseHeaderValue("thingy; raspberry=pie");
@@ -144,6 +155,11 @@ unittest
 HeaderValueParamsParser parseHeaderValueParams(hstring input)
 {
     return HeaderValueParamsParser(input);
+}
+
+HeaderValueParamsParser parseHeaderValueParams(const(char)[] input)
+{
+    return parseHeaderValueParams(hstring(input));
 }
 
 struct HeaderValueParamsParser

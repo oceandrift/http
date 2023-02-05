@@ -100,8 +100,8 @@ final class Server
 
                 // dfmt off
                 response = (keepAlive)
-                    ? response.withHeader!"Connection"("keep-alive")
-                    : response.withHeader!"Connection"("close")
+                    ? response.withHeader!"Connection"("keep-alive".imdup)
+                    : response.withHeader!"Connection"("close".imdup)
                 ;
                 // dfmt on
 

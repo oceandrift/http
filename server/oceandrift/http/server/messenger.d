@@ -162,8 +162,8 @@ void sendResponse(TCPConnection connection, Response response)
     connection.write(" ");
     connection.write(
         (response.reasonPhrase.length > 0)
-            ? response.reasonPhrase
-            : getReasonPhrase(response.statusCode)
+            ? response.reasonPhrase.data
+            : getReasonPhrase(response.statusCode).data
     );
     connection.write(CRLF);
 
@@ -171,9 +171,9 @@ void sendResponse(TCPConnection connection, Response response)
     {
         foreach (value; header.values)
         {
-            connection.write(header.name);
+            connection.write(header.name.data);
             connection.write(": ");
-            connection.write(value);
+            connection.write(value.data);
             connection.write(CRLF);
         }
     }
@@ -183,17 +183,17 @@ void sendResponse(TCPConnection connection, Response response)
 
     connection.write(CRLF);
     foreach (data; response.body_)
-        connection.write(data);
+        connection.write(data.data);
 
     connection.flush();
 }
 
-void sendResponse(TCPConnection connection, int status, string reasonPhrase)
+void sendResponse(TCPConnection connection, int status, hstring reasonPhrase)
 {
     connection.write("HTTP/1.1 ");
     connection.write(status.to!string);
     connection.write(" ");
-    connection.write(reasonPhrase);
+    connection.write(reasonPhrase.data);
     connection.write(CRLF);
     connection.flush();
 }

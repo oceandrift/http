@@ -22,6 +22,7 @@
  +/
 module oceandrift.http.microframework.uri;
 
+import oceandrift.http.message : assumeImmortal, imdup;
 public import oceandrift.http.message : hstring;
 
 @safe pure:
@@ -36,6 +37,11 @@ hstring path(hstring uri) nothrow @nogc
         return uri;
 
     return uri[0 .. posQuery];
+}
+
+hstring path(const(char)[] uri) nothrow @nogc
+{
+    return path(hstring(uri));
 }
 
 ///
@@ -54,9 +60,14 @@ hstring query(hstring uri) nothrow @nogc
     immutable posQuery = uri.indexOf('?');
 
     if (posQuery < 0)
-        return null;
+        return hstring(null);
 
     return uri[posQuery + 1 .. $];
+}
+
+hstring query(const(char)[] uri) nothrow @nogc
+{
+    return query(hstring(uri));
 }
 
 ///
@@ -100,7 +111,7 @@ bool isHexLower(char c) nothrow @nogc
 
     Input MUST be two byte long
  +/
-bool htoi(hstring input, out ubyte result) nothrow @nogc
+bool htoi(const(char)[] input, out ubyte result) nothrow @nogc
 {
     import std.ascii : isDigit;
 
@@ -217,7 +228,7 @@ struct URLDecoder(bool treatPlusAsSpace = true)
             immutable bool twoMoreLeft = ((_input.length - _n) > 2);
             if (twoMoreLeft)
             {
-                immutable hexDecodable = htoi(_input[(_n + 1) .. (_n + 3)], _front);
+                immutable hexDecodable = htoi(_input[(_n + 1) .. (_n + 3)].data, _front);
                 if (hexDecodable)
                 {
                     _n += 3;
@@ -234,13 +245,18 @@ struct URLDecoder(bool treatPlusAsSpace = true)
     {
         import std.range : array;
 
-        return array(this);
+        return array(this).imdup;
     }
 }
 
 URLDecoder!treatPlusAsSpace urlDecode(bool treatPlusAsSpace = true)(hstring input)
 {
     return URLDecoder!treatPlusAsSpace(input);
+}
+
+URLDecoder!treatPlusAsSpace urlDecode(bool treatPlusAsSpace = true)(const(char)[] input)
+{
+    return urlDecode!treatPlusAsSpace(hstring(input));
 }
 
 ///
@@ -410,17 +426,27 @@ struct URLEncoder
         ++_n;
     }
 
-    hstring toHString()
+    string toString()
     {
         import std.range : array;
 
         return array(this);
+    }
+
+    hstring toHString()
+    {
+        return (string d) @trusted { return assumeImmortal(d); }(this.toString());
     }
 }
 
 URLEncoder urlEncode(const hstring input) nothrow @nogc
 {
     return URLEncoder(input);
+}
+
+URLEncoder urlEncode(const const(char)[] input) nothrow @nogc
+{
+    return urlEncode(hstring(input));
 }
 
 unittest

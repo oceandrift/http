@@ -37,6 +37,7 @@ subPackage {
     targetPath "bin"
     importPaths "microframework/"
     sourcePaths "microframework/"
+    dflags "-preview=dip1000"
     dependency "oceandrift-http:server" version="*"
     dependency "oceandrift-validation" version="~>0.2"
 }
