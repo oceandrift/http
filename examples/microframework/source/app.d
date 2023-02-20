@@ -2,8 +2,8 @@ import oceandrift.http.microframework.app;
 
 // listen on port 8080
 static immutable listenOn = [
-    Socket(8080, "::1"),       // IPv6 loopback address
-    Socket(8080, "127.0.0.1"), // IPv4 loopback address
+    makeSocketAddress("[::1]", 8080),     // IPv6 loopback address
+    makeSocketAddress("127.0.0.1", 8080), // IPv4 loopback address
 ];
 
 int main() @safe
@@ -140,7 +140,7 @@ int main() @safe
         });
 
         // GET /validate
-        router.get("/validate", delegate(Request request, Response response) {
+        router.get("/validate", delegate(Request request, Response response) @safe {
             struct MyData
             {
                 import oceandrift.validation.constraints;
@@ -189,7 +189,10 @@ int main() @safe
                 // print a pretty error message
                 response.body_.write(`<h2 style="color: #F00">Validation failed</h2><p>Bad request</p><ul>`);
                 foreach (e; validationResult.errors)
-                    response.body_.write(`<li>`, e.field, ": ", e.message, `</li>`);
+                    response.body_.write(`<li>`, e.field.idup, ": ", e.message.idup, `</li>`);
+                    // idup should be unnecessary once those are fixed:
+                    // - https://issues.dlang.org/show_bug.cgi?id=23682
+                    // - https://issues.dlang.org/show_bug.cgi?id=22916
                 response.body_.write(`</ul>`);
 
                 return response.withStatus(400);
@@ -208,6 +211,7 @@ int main() @safe
             return response;
         });
 
+        // GET /middleware
         router.get("/middleware",  delegate(Request request, Response response) {
             // regular request handler
             response.body_.write("Main Request Handler\n");
@@ -225,5 +229,11 @@ int main() @safe
             response.body_.write("after 2\n");
             return response;
         });
+
+        // Not Found (HTTP Status 404)
+        router.notFoundHandler = delegate(Request request, Response response) {
+            response.body_.write("Not Found :(");
+            return response;
+        };
     });
 }

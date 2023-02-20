@@ -1,5 +1,6 @@
 module oceandrift.http.microframework.app;
 
+import core.runtime : Runtime;
 import oceandrift.http.microframework.router;
 import oceandrift.http.server;
 
@@ -10,22 +11,15 @@ public import oceandrift.http.microframework.kvp;
 public import oceandrift.http.microframework.router : MiddlewareNext, Router, RoutedRequestHandler, RouteMatchMeta;
 public import oceandrift.http.microframework.uri;
 public import oceandrift.http.microframework.validation;
+public import socketplate.address;
+public import socketplate.server : SocketServer, SocketServerTunables;
+public import socketplate.log;
 public import std.conv : to;
 
 @safe:
 
 ///
-struct Socket
-{
-    /// Port number
-    ushort port;
-
-    /// Address (e.g. IPv4 address, IPv6 address)
-    string address;
-}
-
-///
-alias RouterConfigDelegate = void delegate(Router router) @safe;
+alias RouterConfigDelegate = void delegate(Router) @safe;
 
 /++
     Straightforward microframework app bootstrapper
@@ -49,21 +43,51 @@ alias RouterConfigDelegate = void delegate(Router router) @safe;
     }
     ---
  +/
-int runFramework(const Socket[] listenOn, RouterConfigDelegate configureRouter)
+int runFramework(
+    const SocketAddress[] listenOn,
+    RouterConfigDelegate configureRouter,
+    Tunables tunables = Tunables(),
+    SocketServerTunables socketServerTunables = SocketServerTunables(),
+)
 in (configureRouter !is null)
 {
     Router router;
-    Server server = bootWithRouter(router);
+    RequestHandler requestHandler = makeRouterRequestHandler(router);
 
-    foreach (Socket socket; listenOn)
-        server.listen(socket.port, socket.address);
+    auto server = new SocketServer(socketServerTunables);
+    foreach (SocketAddress socketAddr; listenOn)
+        server.listenHTTP(socketAddr, requestHandler, tunables);
 
     configureRouter(router);
 
-    // shutdown cleanly on exit
-    scope (exit)
-        server.shutdown();
+    server.bind();
 
     // run application
-    return runApplication();
+    return server.run();
+}
+
+int quickstart(
+    string appName,
+    string[] args,
+    RouterConfigDelegate configureRouter,
+    Tunables tunables = Tunables(),
+    string[] defaultListeningAddresses = null,
+    SocketServerTunables socketServerTunables = SocketServerTunables(),
+)
+in (configureRouter !is null)
+{
+    import socketplate.app;
+
+    Router router;
+    ConnectionHandler connectionHandler = makeHTTPServer(makeRouterRequestHandler(router), tunables);
+
+    configureRouter(router);
+
+    return runSocketplateAppTCP(
+        appName,
+        args,
+        connectionHandler,
+        defaultListeningAddresses,
+        socketServerTunables,
+    );
 }

@@ -4,18 +4,18 @@ import std.sumtype;
 import oceandrift.http.message;
 import oceandrift.http.microframework.routetree;
 import oceandrift.http.microframework.uri;
-import oceandrift.http.server : RequestHandler, Server;
+import oceandrift.http.server : RequestHandler, HTTPServer;
 
 public import oceandrift.http.microframework.routetree : RoutedRequestHandler, RouteMatchMeta;
 
 @safe:
 
-Server bootWithRouter(out Router router)
+RequestHandler makeRouterRequestHandler(out Router router)
 {
-    import oceandrift.http.server : boot;
+    import oceandrift.http.server : listenHTTP;
 
     router = new Router();
-    return boot(&router.handleRequest);
+    return &router.handleRequest;
 }
 
 alias MiddlewareRequestHandler = Response delegate(
@@ -96,7 +96,8 @@ struct MiddlewareCollection
 {
 @safe:
 
-    private {
+    private
+    {
         MiddlewareRequestHandler[] _middleware = [];
     }
 

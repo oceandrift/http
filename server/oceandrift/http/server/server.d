@@ -2,10 +2,13 @@ module oceandrift.http.server.server;
 
 import oceandrift.http.message;
 import oceandrift.http.server.messenger;
+import socketplate.address;
+import socketplate.connection;
+import socketplate.log;
+import socketplate.server;
 import std.datetime : dur;
-import vibe.core.log;
-import vibe.core.net;
-import vibe.core.stream;
+import std.socket : Address;
+import std.string : format;
 
 @safe:
 
@@ -14,48 +17,30 @@ import vibe.core.stream;
  +/
 alias RequestHandler = Response delegate(Request request, Response response) @safe;
 
-final class Server
+struct HTTPServer
 {
 @safe:
     private
     {
-        TCPListener[] _listeners;
         RequestHandler _requestHandler;
+        Tunables _tunables;
     }
 
-    public this(RequestHandler requestHandler) nothrow pure @nogc
+    public this(RequestHandler requestHandler, Tunables tunables) nothrow pure
     {
         _requestHandler = requestHandler;
     }
 
-    void listen(ushort port = 8080, string address = "::1")
-    in (_requestHandler !is null)
+    private void serve(SocketConnection connection) nothrow
     {
-        TCPListener listener = listenTCP(port, &this.serve, address);
-        _listeners ~= listener;
+        bool startedRequestParsing = false;
 
-        logInfo("oceandrift/http: will listen on http://%s", listener.bindAddress.toString);
-    }
-
-    void shutdown()
-    {
-        logDiagnostic("oceandrift/http: shutdown()");
-
-        foreach (TCPListener listener; _listeners)
-            listener.stopListening();
-
-        _listeners = [];
-    }
-
-    private void serve(TCPConnection connection) nothrow
-    {
         try
         {
-            connection.tcpNoDelay = true;
-            connection.readTimeout = dur!"minutes"(3);
-
             while (!connection.empty)
             {
+                startedRequestParsing = true;
+
                 // The stack buffer breaks @safe-ty guarantees.
                 // It would need `scope` which in it’s current state isn’t too handy
                 // (→ “attribute soup”, “cannot take address […] indirection” on `const header = request.getHeader!"abc"();` …).
@@ -114,8 +99,12 @@ final class Server
                     return;
             }
         }
-        catch (ReadTimeoutException ex)
+        catch (SocketTimeoutException ex)
         {
+            // just a dead keep-alive connection?
+            if (!startedRequestParsing)
+                return;
+
             // timeout → send an error 408
             try
                 return sendResponse(connection, 408, getReasonPhrase(408));
@@ -134,18 +123,41 @@ final class Server
     }
 }
 
-///
-Server boot(RequestHandler requestHandler) nothrow
+/++
+    Registers a new TCP listener
+ +/
+void listenHTTP(SocketServer server, Address address, RequestHandler requestHandler, Tunables tunables = Tunables())
 {
-    return new Server(requestHandler);
+    logInfo("oceandrift/http: will listen on http://" ~ address.toString);
+    return server.listenTCP(address, makeHTTPServer(requestHandler, tunables));
 }
 
-public
+/// ditto
+void listenHTTP(
+    SocketServer server,
+    SocketAddress listenOn,
+    RequestHandler requestHandler,
+    Tunables tunables = Tunables()
+)
 {
-    private import vibe.core.core;
+    logInfo(format!"oceandrift/http: will listen on http://%s:%d"(listenOn.address, listenOn.port));
+    return server.listenTCP(listenOn, makeHTTPServer(requestHandler, tunables));
+}
 
-    /++
-        Run the application (and eventloop)
-     +/
-    alias runApplication = vibe.core.core.runApplication;
+/// ditto
+void listenHTTP(SocketServer server, string listenOn, RequestHandler requestHandler, Tunables tunables = Tunables())
+{
+    logInfo("oceandrift/http: will listen on http://" ~ listenOn);
+    return server.listenTCP(listenOn, makeHTTPServer(requestHandler, tunables));
+}
+
+ConnectionHandler makeHTTPServer(RequestHandler requestHandler, Tunables tunables) nothrow
+{
+    HTTPServer* httpServer = new HTTPServer(requestHandler, tunables);
+    return &httpServer.serve;
+}
+
+///
+struct Tunables
+{
 }

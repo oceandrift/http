@@ -1,7 +1,7 @@
 {
 	"name": "oceandrift-http-microframework-example",
-    "targetPath": "bin",
-    "dependencies": {
-        "oceandrift-http:microframework": {"path": "../../"}
-    }
+	"targetPath": "bin",
+	"dependencies": {
+		"oceandrift-http:microframework": {"path": "../../"}
+	}
 }

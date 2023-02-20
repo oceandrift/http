@@ -1,12 +1,13 @@
 import oceandrift.http.message;
 import oceandrift.http.server.server;
-import vibe.core.log;
+import socketplate.server : SocketServer;
 
 int main() @safe
 {
-    Server server = boot(delegate(Request request, Response response) {
-        //logInfo("%s", request);
+    // create a new socketplate server
+    auto server = new SocketServer();
 
+    RequestHandler requestHandler = delegate(Request request, Response response) {
         if (request.uri != "/")
             return response.withStatus(404);
 
@@ -29,16 +30,15 @@ int main() @safe
         return response
             .withHeader!"Content-Type"("text/plain; charset=UTF-8")
             .withHeader!"Server"("oceandrift/http");
-    });
+    };
 
     // listen on port 8080
-    server.listen(8080, "::1"); // IPv6 loopback address
-    server.listen(8080, "127.0.0.1"); // IPv4 loopback address
+    server.listenHTTP("[::1]:8080", requestHandler);     // IPv6 loopback address
+    server.listenHTTP("127.0.0.1:8080", requestHandler); // IPv4 loopback address
 
-    // shutdown cleanly on exit
-    scope (exit)
-        server.shutdown();
+    // bind to all ports
+    server.bind();
 
     // run application
-    return runApplication();
+    return server.run();
 }

@@ -2,17 +2,16 @@
     HTTP request parsing and response sending functionality
 
     $(NOTE
-        While code in this module is mostly `public` (so you can happily use it to hack cool things together!)
+        While code in this module is mostly `public` (so you can happily use it to hack cool things together!),
         it’s rather to be considered an implementation detail and subject to potentially breaking changes.
     )
  +/
 module oceandrift.http.server.messenger;
 
 import oceandrift.http.message;
+import socketplate.connection;
 import std.conv : to;
 import std.datetime : dur;
-import vibe.core.net;
-import vibe.core.stream;
 
 @safe:
 
@@ -24,7 +23,7 @@ enum requestMaxBodySize = (1024 ^^ 2) * 16;
 pragma(msg, "Max request body size: " ~ requestMaxBodySize.to!string);
 
 /// Returns: 0 on success
-int parseRequest(TCPConnection connection, out Request request) //int parseRequest(TCPConnection connection, ubyte[] defaultBuffer, out Request request)
+int parseRequest(ref SocketConnection connection, out Request request)
 {
     import httparsed;
 
@@ -37,25 +36,24 @@ int parseRequest(TCPConnection connection, out Request request) //int parseReque
     parser.setup();
 
     int httparsedStatus = 0;
-    size_t bytesReadTotalWhileParsingHeaders = 0;
+    ptrdiff_t bytesReadTotalWhileParsingHeaders = 0;
     uint headerParserLastPos = 0;
 
     // parse header
     while (true)
     {
-        // wait for data
-        if (!connection.waitForData(dur!"minutes"(2)))
-            return 408;
-
-        // read buffer
-        size_t bytesRead = connection.read(
+        // wait for data & read into buffer
+        ptrdiff_t bytesRead = connection.receive(
             buffer[bytesReadTotalWhileParsingHeaders .. $],
-            IOMode.once
         );
+
+        if ((bytesRead == socketERROR) || (bytesRead == 0))
+            return -1;
+
         bytesReadTotalWhileParsingHeaders += bytesRead;
 
         // call httparsed
-        delegate() @trusted {
+        () @trusted {
             httparsedStatus = parser.parseRequest(buffer[0 .. bytesReadTotalWhileParsingHeaders], headerParserLastPos);
         }();
 
@@ -124,9 +122,9 @@ int parseRequest(TCPConnection connection, out Request request) //int parseReque
 
         try
         {
-            immutable size_t bytesRead = connection.read(buffer, IOMode.all);
-            contentLengthLeft -= bytesRead;
-            reqBody.write(buffer[0 .. bytesRead]);
+            const(ubyte)[] bufferReceived = connection.receiveAll(buffer);
+            contentLengthLeft -= bufferReceived.length;
+            reqBody.write(bufferReceived);
         }
         catch (Exception ex)
             return 408;
@@ -138,7 +136,7 @@ int parseRequest(TCPConnection connection, out Request request) //int parseReque
             buffer = new ubyte[](contentLengthLeft);
 
             try
-                connection.read(buffer, IOMode.all);
+                buffer = connection.receiveAll(buffer);
             catch (Exception ex)
                 return 408;
 
@@ -155,47 +153,44 @@ int parseRequest(TCPConnection connection, out Request request) //int parseReque
     return 0;
 }
 
-void sendResponse(TCPConnection connection, Response response)
+void sendResponse(ref SocketConnection connection, Response response)
 {
-    connection.write("HTTP/1.1 ");
-    connection.write(response.statusCode.to!string);
-    connection.write(" ");
-    connection.write(
+    connection.send("HTTP/1.1 ");
+    connection.send(response.statusCode.to!string);
+    connection.send(" ");
+    connection.send(
         (response.reasonPhrase.length > 0)
             ? response.reasonPhrase
             : getReasonPhrase(response.statusCode)
     );
-    connection.write(CRLF);
+    connection.send(CRLF);
 
     foreach (Header header; response.headers)
     {
         foreach (value; header.values)
         {
-            connection.write(header.name);
-            connection.write(": ");
-            connection.write(value);
-            connection.write(CRLF);
+            connection.send(header.name);
+            connection.send(": ");
+            connection.send(value);
+            connection.send(CRLF);
         }
     }
-    connection.write("content-length: ");
-    connection.write(response.body_.dataLength.to!string);
-    connection.write(CRLF);
+    connection.send("content-length: ");
+    connection.send(response.body_.dataLength.to!string);
+    connection.send(CRLF);
 
-    connection.write(CRLF);
+    connection.send(CRLF);
     foreach (data; response.body_)
-        connection.write(data);
-
-    connection.flush();
+        connection.send(data);
 }
 
-void sendResponse(TCPConnection connection, int status, string reasonPhrase)
+void sendResponse(ref SocketConnection connection, int status, string reasonPhrase)
 {
-    connection.write("HTTP/1.1 ");
-    connection.write(status.to!string);
-    connection.write(" ");
-    connection.write(reasonPhrase);
-    connection.write(CRLF);
-    connection.flush();
+    connection.send("HTTP/1.1 ");
+    connection.send(status.to!string);
+    connection.send(" ");
+    connection.send(reasonPhrase);
+    connection.send(CRLF);
 }
 
 bool isKeepAlive(Request request)
