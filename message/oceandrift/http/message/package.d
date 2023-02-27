@@ -1,3 +1,6 @@
+/++
+    HTTP Message abstraction and representation
+ +/
 module oceandrift.http.message;
 
 public import oceandrift.http.message.htype;

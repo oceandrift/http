@@ -11,6 +11,7 @@
 +/
 module oceandrift.http.message.messages;
 
+import oceandrift.http.message.dataq;
 import oceandrift.http.message.htype;
 import oceandrift.http.message.lowercasetoken;
 import oceandrift.http.message.multibuffer;
@@ -67,7 +68,7 @@ package(oceandrift.http) struct RequestTransformer
 
     void onBody(MultiBuffer body)
     {
-        _msg._body = body;
+        _msg._body = new InMemoryDataQ(body);
     }
 }
 
@@ -220,7 +221,7 @@ mixin template _Message(TMessage)
     {
         hstring _protocol = "1.1";
         Headers _headers;
-        MultiBuffer _body;
+        DataQ _body;
     }
 
     /++
@@ -399,7 +400,7 @@ mixin template _Message(TMessage)
     /++
         Gets the body of the message
      +/
-    ref MultiBuffer body_() return
+    ref DataQ body_() return
     {
         return _body;
     }
@@ -410,7 +411,7 @@ mixin template _Message(TMessage)
         Returns:
             A new Message with the updated property
      +/
-    TMessage withBody(MultiBuffer body_)
+    TMessage withBody(DataQ body_)
     {
         TMessage m = this;
         m._body = body_;

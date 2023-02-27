@@ -1,8 +1,9 @@
 module oceandrift.http.message.multibuffer;
 
+import oceandrift.http.message.dataq;
 import oceandrift.http.message.htype;
 
-@safe pure:
+@safe:
 
 /++
     List of multiple buffers
@@ -541,4 +542,230 @@ unittest
     mbv.popFront();
     assert(mbv.length == 9);
     assert(mbv[0 .. 8] == "12345678");
+}
+
+/++
+    Data Queue implementation that keeps all data in memory
+ +/
+final class InMemoryDataQ : DataQ, ForwardDataQ
+{
+@safe:
+
+    private
+    {
+        bool _closed = false;
+        MultiBuffer _mb;
+
+        size_t _readOffsetBuffer = 0;
+        size_t _readOffsetBufferBytes = 0;
+    }
+
+    public this() pure nothrow @nogc
+    {
+        _mb = MultiBuffer();
+    }
+
+    public this(hbuffer initialContent) pure nothrow
+    {
+        _mb = MultiBuffer(initialContent);
+    }
+
+    public this(MultiBuffer initialContent) pure nothrow @nogc
+    {
+        _mb = initialContent;
+    }
+
+    InMemoryDataQ save()
+    {
+        auto copy = new InMemoryDataQ();
+        copy._mb = _mb;
+        copy._readOffsetBuffer = _readOffsetBuffer;
+        copy._readOffsetBufferBytes = _readOffsetBufferBytes;
+        copy._closed = _closed;
+        return copy;
+    }
+
+    void close() pure nothrow @nogc
+    {
+        _closed = true;
+    }
+
+    bool closed() pure nothrow @nogc
+    {
+        return _closed;
+    }
+
+    void write(hbuffer input) pure nothrow
+    {
+        _mb.write(input);
+    }
+
+    bool empty() pure nothrow @nogc
+    {
+        return (_readOffsetBuffer >= _mb.length);
+    }
+
+    ptrdiff_t read(scope ubyte[] buffer) pure nothrow @nogc
+    {
+        ptrdiff_t readBytes = 0;
+
+        while ((buffer.length > 0) && (_readOffsetBuffer < _mb.length))
+        {
+            hbuffer currentBufferLeft =
+                _mb._bufferList[_readOffsetBuffer][_readOffsetBufferBytes .. $];
+
+            if (currentBufferLeft.length >= buffer.length)
+            {
+                buffer[0 .. $] = currentBufferLeft[0 .. buffer.length];
+
+                readBytes += buffer.length;
+                _readOffsetBufferBytes += buffer.length;
+
+                return readBytes;
+            }
+
+            buffer[0 .. currentBufferLeft.length] = currentBufferLeft[0 .. $];
+
+            readBytes += currentBufferLeft.length;
+            buffer = buffer[currentBufferLeft.length .. $];
+            _readOffsetBufferBytes = 0;
+            ++_readOffsetBuffer;
+        }
+
+        return readBytes;
+    }
+
+    ptrdiff_t knownLength() pure nothrow @nogc
+    {
+        ptrdiff_t sum = 0;
+        foreach (b; _mb._bufferList[_readOffsetBuffer .. _mb.length])
+            sum += b.length;
+        return sum;
+    }
+
+    void rewindReading() pure nothrow @nogc
+    {
+        _readOffsetBuffer = 0;
+        _readOffsetBufferBytes = 0;
+    }
+
+    void copyTo(WriteableDataQ target)
+    {
+        if (this.empty)
+            return;
+
+        target.write(_mb._bufferList[_readOffsetBuffer][_readOffsetBufferBytes .. $]);
+        ++_readOffsetBuffer;
+        _readOffsetBufferBytes = 0;
+
+        foreach (buffer; _mb._bufferList[_readOffsetBuffer .. $])
+            target.write(buffer);
+
+        // everything read
+        _readOffsetBuffer = _mb.length;
+    }
+
+    void copyTo(ScopeWriteableDataQ target)
+    {
+        if (this.empty)
+            return;
+
+        target.write(_mb._bufferList[_readOffsetBuffer][_readOffsetBufferBytes .. $]);
+        ++_readOffsetBuffer;
+        _readOffsetBufferBytes = 0;
+
+        foreach (buffer; _mb._bufferList[_readOffsetBuffer .. $])
+            target.write(buffer);
+
+        // everything read
+        _readOffsetBuffer = _mb._bufferList.length;
+    }
+}
+
+unittest
+{
+    DataQ dq = new InMemoryDataQ();
+
+    {
+        assert(!dq.closed);
+        assert(dq.empty);
+        assert(dq.knownLength == 0);
+        dq.write([0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90]);
+        assert(!dq.empty);
+        assert(dq.knownLength == 9);
+    }
+
+    {
+        ubyte[2] b;
+        assert(dq.read(b) == 2);
+        assert(b == [0x10, 0x20]);
+
+        assert(dq.read(b) == 2);
+        assert(b == [0x30, 0x40]);
+    }
+
+    DataQ dqCopy = (cast(InMemoryDataQ) dq).save();
+
+    dq.write([0xA0, 0xB0, 0xC0]);
+
+    {
+        ubyte[] b = new ubyte[](4);
+        assert(dq.read(b) == 4);
+        assert(b == [0x50, 0x60, 0x70, 0x80]);
+    }
+
+    {
+        DataQ dq2 = new InMemoryDataQ();
+        dq.copyTo(dq2);
+
+        assert(dq.empty);
+        dq.write([0xD0, 0xE0]);
+        assert(!dq.empty);
+
+        ubyte[8] b;
+        assert(dq2.read(b) == 4);
+        assert(b[0 .. 4] == [0x90, 0xA0, 0xB0, 0xC0]);
+        assert(dq2.empty);
+
+        assert(!dq2.closed);
+        dq2.close();
+        assert(dq2.closed);
+    }
+
+    {
+        ubyte[] b = new ubyte[](8);
+        assert(dq.read(b) == 2);
+        assert(b[0 .. 2] == [0xD0, 0xE0]);
+        assert(dq.empty);
+    }
+
+    {
+        dq.rewindReading();
+        assert(!dq.empty);
+
+        ubyte[16] b;
+        assert(dq.read(b) == 14);
+        assert(b[0 .. 14] == [
+                0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90,
+                0xA0, 0xB0, 0xC0,
+                0xD0, 0xE0,
+            ]);
+
+        assert(!dq.closed);
+        dq.close();
+        assert(dq.closed);
+    }
+
+    {
+        assert(!dqCopy.closed);
+        assert(!dqCopy.empty);
+
+        ubyte[8] b;
+        assert(dqCopy.read(b) == 5);
+        assert(b[0 .. 5] == [0x50, 0x60, 0x70, 0x80, 0x90]);
+        assert(dqCopy.empty);
+
+        dqCopy.close();
+        assert(dqCopy.closed);
+    }
 }
