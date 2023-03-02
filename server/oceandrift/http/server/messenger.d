@@ -208,7 +208,7 @@ void sendResponse(ref SocketConnection connection, int status, string reasonPhra
     connection.send(CRLF);
 }
 
-private void sendResponseBodyAtOnce(ref SocketConnection connection, ReadableDataQ bodyData)
+private void sendResponseBodyAtOnce(ref SocketConnection connection, DataQ bodyData)
 {
     ubyte[bodyChunkSize] buffer;
     while (!bodyData.empty)
@@ -218,7 +218,7 @@ private void sendResponseBodyAtOnce(ref SocketConnection connection, ReadableDat
     }
 }
 
-private void sendResponseBodyChunked(ref SocketConnection connection, ReadableDataQ bodyData)
+private void sendResponseBodyChunked(ref SocketConnection connection, DataQ bodyData)
 {
     import std.string : format, sformat;
 

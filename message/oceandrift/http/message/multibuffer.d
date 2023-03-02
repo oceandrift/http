@@ -547,7 +547,7 @@ unittest
 /++
     Data Queue implementation that keeps all data in memory
  +/
-final class InMemoryDataQ : DataQ, ForwardDataQ
+final class InMemoryDataQ : DataQ
 {
 @safe:
 
@@ -649,7 +649,7 @@ final class InMemoryDataQ : DataQ, ForwardDataQ
         _readOffsetBufferBytes = 0;
     }
 
-    void copyTo(WriteableDataQ target)
+    void copyTo(DataQ target)
     {
         if (this.empty)
             return;
@@ -663,22 +663,6 @@ final class InMemoryDataQ : DataQ, ForwardDataQ
 
         // everything read
         _readOffsetBuffer = _mb.length;
-    }
-
-    void copyTo(ScopeWriteableDataQ target)
-    {
-        if (this.empty)
-            return;
-
-        target.write(_mb._bufferList[_readOffsetBuffer][_readOffsetBufferBytes .. $]);
-        ++_readOffsetBuffer;
-        _readOffsetBufferBytes = 0;
-
-        foreach (buffer; _mb._bufferList[_readOffsetBuffer .. $])
-            target.write(buffer);
-
-        // everything read
-        _readOffsetBuffer = _mb._bufferList.length;
     }
 }
 

@@ -23,38 +23,10 @@ import oceandrift.http.message.htype;
 /++
     A Data Queue
  +/
-interface DataQ : RereadWriteableDataQ, CopyableDataQ
-{
-}
-
-interface ForwardDataQ
-{
-    ForwardDataQ save();
-}
-
-/++
-    A Data Queue that can be read from the beginning multiple times (by calling `rewindRead`)
-    and written to
- +/
-interface RereadWriteableDataQ : ReadWriteableDataQ, RereadableDataQ
-{
-}
-
-/++
-    A Data Queue that can be read from and written to
- +/
-interface ReadWriteableDataQ : ReadableDataQ, WriteableDataQ
-{
-}
-
-/++
-    Data Queue
-
-    Base interface for all Data Queues
- +/
-interface AnyDataQ
+interface DataQ
 {
 @safe:
+
     /++
         Closes the queue
 
@@ -66,14 +38,7 @@ interface AnyDataQ
         Determines whether the queue has been closed
      +/
     bool closed();
-}
 
-/++
-    A Data Queue that can be read from
- +/
-interface ReadableDataQ : AnyDataQ
-{
-@safe:
     /++
         Determines whether there is currently any data left to read
      +/
@@ -100,175 +65,26 @@ interface ReadableDataQ : AnyDataQ
             )
      +/
     ptrdiff_t knownLength();
-}
 
-/++
-    A Data Queue that can be read from the beginning multiple times
- +/
-interface RereadableDataQ : ReadableDataQ
-{
-@safe:
     /++
         Rewinds the read-pointer to the start of the queue.
         The next call to [read] will read data from the beginning of the queue.
      +/
     void rewindReading();
-}
 
-/++
-    A Data Queue that can be directly copied into another one
- +/
-interface CopyableDataQ : AnyDataQ
-{
-@safe:
     /++
         Copies the currently queued data into another queue
      +/
-    void copyTo(WriteableDataQ);
+    void copyTo(DataQ);
 
-    /// ditto
-    void copyTo(ScopeWriteableDataQ);
-}
-
-/++
-    A Data Queue that data can be written to
-    
-    Written data is enqueued at the end (“appended”).
- +/
-interface WriteableDataQ : AnyDataQ
-{
-@safe:
     /++
         Enqueues the passed data
      +/
     void write(hbuffer);
 }
 
-/// ditto
-interface ScopeWriteableDataQ : AnyDataQ
-{
-@safe:
-    /++
-        Enqueues the passed `scope` data
-     +/
-    void write(scope hbuffer);
-}
-
-final class ProxyDataQ : DataQ
-{
-    private
-    {
-        AnyDataQ _dataQ;
-    }
-
-    public this(AnyDataQ dataQ) pure nothrow @nogc
-    {
-        _dataQ = dataQ;
-    }
-
-    public void replace(AnyDataQ dataQ) pure nothrow @nogc
-    {
-        _dataQ = dataQ;
-    }
-
-    // DataQ
-    public
-    {
-        void close()
-        {
-            return _dataQ.close();
-        }
-
-        bool closed()
-        {
-            return _dataQ.closed();
-        }
-
-        bool empty()
-        {
-            if (auto dataQ = cast(ReadableDataQ) _dataQ)
-                return dataQ.empty;
-
-            return true;
-        }
-
-        size_t read(scope ubyte[] buffer)
-        {
-            if (auto dataQ = cast(ReadableDataQ) _dataQ)
-                return dataQ.read(buffer);
-
-            return 0;
-        }
-
-        ptrdiff_t knownLength()
-        {
-            if (auto dataQ = cast(ReadableDataQ) _dataQ)
-                return dataQ.knownLength;
-
-            return ptrdiff_t.min;
-        }
-
-        void rewindReading()
-        {
-            if (auto dataQ = cast(RereadableDataQ) _dataQ)
-                return dataQ.rewindReading;
-
-            assert(false, "Underlying DataQ is not rereadable");
-        }
-
-        void write(hbuffer data)
-        {
-            if (auto dataQ = cast(WriteableDataQ) _dataQ)
-                return dataQ.write(data);
-
-            assert(false, "Underlying DataQ is not writeable");
-        }
-
-        void copyTo(WriteableDataQ target) @trusted
-        {
-            if (auto dataQ = cast(CopyableDataQ) _dataQ)
-                return dataQ.copyTo(target);
-
-            assert(false);
-        }
-
-        void copyTo(ScopeWriteableDataQ target) @trusted
-        {
-            if (auto dataQ = cast(CopyableDataQ) _dataQ)
-                return dataQ.copyTo(target);
-
-            assert(false);
-        }
-    }
-
-    // convenience
-    public
-    {
-        void write(hstring data)
-        {
-            return this.write(cast(hbuffer) data);
-        }
-
-        void write(Args...)(Args data) if (Args.length > 1)
-        {
-            import std.conv : to;
-
-            static foreach (d; data)
-            {
-                static assert(__traits(compiles, cast(hbuffer)(typeof(d)
-                        .init)),
-                    "Incompatible type: " ~ typeof(d).stringof
-                );
-
-                this.write(cast(hbuffer) d);
-            }
-        }
-
-    }
-}
-
 ///
-final class FileReaderDataQ : CopyableDataQ, RereadableDataQ
+final class FileReaderDataQ : DataQ
 {
     import std.stdio : File;
 
@@ -318,7 +134,7 @@ final class FileReaderDataQ : CopyableDataQ, RereadableDataQ
         return _file.rewind();
     }
 
-    void copyTo(WriteableDataQ target)
+    void copyTo(DataQ target)
     {
         enum chunkSize = 1024 * 4;
         auto buffer = new ubyte[](chunkSize);
@@ -330,15 +146,8 @@ final class FileReaderDataQ : CopyableDataQ, RereadableDataQ
         }
     }
 
-    void copyTo(ScopeWriteableDataQ target)
+    void write(hbuffer)
     {
-        enum chunkSize = 1024;
-        ubyte[chunkSize] buffer;
-
-        while (!_file.eof)
-        {
-            hbuffer readData = _file.rawRead(buffer);
-            target.write(readData);
-        }
+        assert(false);
     }
 }
