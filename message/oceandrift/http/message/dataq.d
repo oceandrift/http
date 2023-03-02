@@ -88,7 +88,7 @@ interface ReadableDataQ : AnyDataQ
                 * or `< 0` on failure
             *)
      +/
-    ptrdiff_t read(scope ubyte[]);
+    size_t read(scope ubyte[]);
 
     /++
         Determines the known length of the current queue
@@ -154,6 +154,119 @@ interface ScopeWriteableDataQ : AnyDataQ
     void write(scope hbuffer);
 }
 
+final class ProxyDataQ : DataQ
+{
+    private
+    {
+        AnyDataQ _dataQ;
+    }
+
+    public this(AnyDataQ dataQ) pure nothrow @nogc
+    {
+        _dataQ = dataQ;
+    }
+
+    public void replace(AnyDataQ dataQ) pure nothrow @nogc
+    {
+        _dataQ = dataQ;
+    }
+
+    // DataQ
+    public
+    {
+        void close()
+        {
+            return _dataQ.close();
+        }
+
+        bool closed()
+        {
+            return _dataQ.closed();
+        }
+
+        bool empty()
+        {
+            if (auto dataQ = cast(ReadableDataQ) _dataQ)
+                return dataQ.empty;
+
+            return true;
+        }
+
+        size_t read(scope ubyte[] buffer)
+        {
+            if (auto dataQ = cast(ReadableDataQ) _dataQ)
+                return dataQ.read(buffer);
+
+            return 0;
+        }
+
+        ptrdiff_t knownLength()
+        {
+            if (auto dataQ = cast(ReadableDataQ) _dataQ)
+                return dataQ.knownLength;
+
+            return ptrdiff_t.min;
+        }
+
+        void rewindReading()
+        {
+            if (auto dataQ = cast(RereadableDataQ) _dataQ)
+                return dataQ.rewindReading;
+
+            assert(false, "Underlying DataQ is not rereadable");
+        }
+
+        void write(hbuffer data)
+        {
+            if (auto dataQ = cast(WriteableDataQ) _dataQ)
+                return dataQ.write(data);
+
+            assert(false, "Underlying DataQ is not writeable");
+        }
+
+        void copyTo(WriteableDataQ target) @trusted
+        {
+            if (auto dataQ = cast(CopyableDataQ) _dataQ)
+                return dataQ.copyTo(target);
+
+            assert(false);
+        }
+
+        void copyTo(ScopeWriteableDataQ target) @trusted
+        {
+            if (auto dataQ = cast(CopyableDataQ) _dataQ)
+                return dataQ.copyTo(target);
+
+            assert(false);
+        }
+    }
+
+    // convenience
+    public
+    {
+        void write(hstring data)
+        {
+            return this.write(cast(hbuffer) data);
+        }
+
+        void write(Args...)(Args data) if (Args.length > 1)
+        {
+            import std.conv : to;
+
+            static foreach (d; data)
+            {
+                static assert(__traits(compiles, cast(hbuffer)(typeof(d)
+                        .init)),
+                    "Incompatible type: " ~ typeof(d).stringof
+                );
+
+                this.write(cast(hbuffer) d);
+            }
+        }
+
+    }
+}
+
 ///
 final class FileReaderDataQ : CopyableDataQ, RereadableDataQ
 {
@@ -186,7 +299,7 @@ final class FileReaderDataQ : CopyableDataQ, RereadableDataQ
         return _file.eof;
     }
 
-    ptrdiff_t read(scope ubyte[] buffer)
+    size_t read(scope ubyte[] buffer)
     {
         return _file.rawRead(buffer).length;
     }

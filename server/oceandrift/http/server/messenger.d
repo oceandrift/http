@@ -19,6 +19,7 @@ enum CRLF = "\r\n";
 enum CRLFCRLF = CRLF ~ CRLF;
 enum requestInitialBufferSize = 2 * 1024;
 enum requestMaxBodySize = (1024 ^^ 2) * 16;
+enum bodyChunkSize = 1024 * 2;
 
 pragma(msg, "Max request body size: " ~ requestMaxBodySize.to!string);
 
@@ -155,6 +156,9 @@ int parseRequest(ref SocketConnection connection, out Request request)
 
 void sendResponse(ref SocketConnection connection, Response response)
 {
+    scope (exit)
+        response.body_.close();
+
     connection.send("HTTP/1.1 ");
     connection.send(response.statusCode.to!string);
     connection.send(" ");
@@ -175,13 +179,24 @@ void sendResponse(ref SocketConnection connection, Response response)
             connection.send(CRLF);
         }
     }
-    connection.send("content-length: ");
-    connection.send(response.body_.dataLength.to!string);
-    connection.send(CRLF);
 
-    connection.send(CRLF);
-    foreach (data; response.body_)
-        connection.send(data);
+    // no known body length?
+    immutable ptrdiff_t contentLength = response.body_.knownLength;
+    if (contentLength < 0)
+    {
+        // no, send chunked
+        connection.send("transfer-encoding: chunked");
+        connection.send(CRLFCRLF);
+        sendResponseBodyChunked(connection, response.body_);
+    }
+    else
+    {
+        // yes, send content-length
+        connection.send("content-length: ");
+        connection.send(response.body_.knownLength.to!hstring);
+        connection.send(CRLFCRLF);
+        sendResponseBodyAtOnce(connection, response.body_);
+    }
 }
 
 void sendResponse(ref SocketConnection connection, int status, string reasonPhrase)
@@ -191,6 +206,39 @@ void sendResponse(ref SocketConnection connection, int status, string reasonPhra
     connection.send(" ");
     connection.send(reasonPhrase);
     connection.send(CRLF);
+}
+
+private void sendResponseBodyAtOnce(ref SocketConnection connection, ReadableDataQ bodyData)
+{
+    ubyte[bodyChunkSize] buffer;
+    while (!bodyData.empty)
+    {
+        immutable size_t bytesRead = bodyData.read(buffer);
+        connection.send(buffer[0 .. bytesRead]);
+    }
+}
+
+private void sendResponseBodyChunked(ref SocketConnection connection, ReadableDataQ bodyData)
+{
+    import std.string : format, sformat;
+
+    enum chunkLengthMaxStringLength = format("%X", size_t.max).length;
+
+    char[chunkLengthMaxStringLength] chunkLengthBuffer;
+    ubyte[bodyChunkSize] buffer;
+
+    while (!bodyData.empty)
+    {
+        immutable size_t bytesRead = bodyData.read(buffer);
+        const ubyte[] chunk = buffer[0 .. bytesRead];
+
+        const char[] chunkLength = sformat!"%X"(chunkLengthBuffer, chunk.length);
+        connection.send(chunkLength);
+        connection.send(CRLF);
+
+        connection.send(chunk);
+        connection.send(CRLF);
+    }
 }
 
 bool isKeepAlive(Request request)

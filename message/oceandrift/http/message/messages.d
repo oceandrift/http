@@ -68,7 +68,7 @@ package(oceandrift.http) struct RequestTransformer
 
     void onBody(MultiBuffer body)
     {
-        _msg._body = new InMemoryDataQ(body);
+        _msg._body = new ProxyDataQ(new InMemoryDataQ(body));
     }
 }
 
@@ -221,7 +221,7 @@ mixin template _Message(TMessage)
     {
         hstring _protocol = "1.1";
         Headers _headers;
-        DataQ _body;
+        ProxyDataQ _body;
     }
 
     /++
@@ -400,7 +400,7 @@ mixin template _Message(TMessage)
     /++
         Gets the body of the message
      +/
-    ref DataQ body_() return
+    ref ProxyDataQ body_() return
     {
         return _body;
     }
@@ -411,10 +411,10 @@ mixin template _Message(TMessage)
         Returns:
             A new Message with the updated property
      +/
-    TMessage withBody(DataQ body_)
+    TMessage withBody(DataQ body)
     {
         TMessage m = this;
-        m._body = body_;
+        m._body.replace = body;
         return m;
     }
 }
@@ -558,6 +558,7 @@ struct Response
     {
         this._statusCode = statusCode;
         this._reasonPhrase = reasonPhrase;
+        this._body = new ProxyDataQ(new InMemoryDataQ());
     }
 }
 

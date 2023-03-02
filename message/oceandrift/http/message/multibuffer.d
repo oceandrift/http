@@ -605,9 +605,9 @@ final class InMemoryDataQ : DataQ, ForwardDataQ
         return (_readOffsetBuffer >= _mb.length);
     }
 
-    ptrdiff_t read(scope ubyte[] buffer) pure nothrow @nogc
+    size_t read(scope ubyte[] buffer) pure nothrow @nogc
     {
-        ptrdiff_t readBytes = 0;
+        size_t readBytes = 0;
 
         while ((buffer.length > 0) && (_readOffsetBuffer < _mb.length))
         {
