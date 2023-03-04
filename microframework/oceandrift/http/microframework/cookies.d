@@ -32,7 +32,7 @@
 module oceandrift.http.microframework.cookies;
 
 import oceandrift.http.message : hstring, Response;
-import oceandrift.http.microframework.middleware;
+import oceandrift.http.microframework.routing.middleware;
 import std.typecons : Nullable;
 
 @safe:

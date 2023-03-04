@@ -1,4 +1,4 @@
-module oceandrift.http.microframework.middleware;
+module oceandrift.http.microframework.routing.middleware;
 
 import oceandrift.http.microframework.routing.router : RoutedRequestHandler;
 

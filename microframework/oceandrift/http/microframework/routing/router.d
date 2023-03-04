@@ -2,7 +2,7 @@ module oceandrift.http.microframework.routing.router;
 
 import std.sumtype;
 import oceandrift.http.message;
-import oceandrift.http.microframework.middleware;
+import oceandrift.http.microframework.routing.middleware;
 import oceandrift.http.microframework.routing.routetree;
 import oceandrift.http.microframework.uri;
 import oceandrift.http.server : RequestHandler, HTTPServer;
