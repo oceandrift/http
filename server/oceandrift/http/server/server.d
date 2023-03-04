@@ -141,14 +141,37 @@ void listenHTTP(
     Tunables tunables = Tunables()
 )
 {
-    logInfo(format!"oceandrift/http: will listen on http://%s:%d"(listenOn.address, listenOn.port));
+    final switch (listenOn.type) with (SocketAddress.Type)
+    {
+    case invalid:
+        assert(false);
+
+    case unixDomain:
+        logInfo(
+            format!"oceandrift/http: will listen on unix://%s"(listenOn.address)
+        );
+        break;
+
+    case ipv4:
+        logInfo(
+            format!"oceandrift/http: will listen on http://%s:%d"(listenOn.address, listenOn.port)
+        );
+        break;
+
+    case ipv6:
+        logInfo(
+            format!"oceandrift/http: will listen on http://[%s]:%d"(listenOn.address, listenOn.port)
+        );
+        break;
+    }
     return server.listenTCP(listenOn, makeHTTPServer(requestHandler, tunables));
 }
 
 /// ditto
 void listenHTTP(SocketServer server, string listenOn, RequestHandler requestHandler, Tunables tunables = Tunables())
 {
-    logInfo("oceandrift/http: will listen on http://" ~ listenOn);
+    scope (success)
+        logInfo("oceandrift/http: will listen on http://" ~ listenOn);
     return server.listenTCP(listenOn, makeHTTPServer(requestHandler, tunables));
 }
 
