@@ -12,6 +12,7 @@ import oceandrift.http.message.htype;
 import oceandrift.http.message.lowercasetoken;
 import oceandrift.http.message.multibuffer;
 import std.traits : ReturnType;
+import std.variant : Variant;
 
 @safe pure:
 
@@ -218,6 +219,7 @@ mixin template _Message(TMessage)
         hstring _protocol = "1.1";
         Headers _headers;
         DataQ _body;
+        Variant[string] _tags;
     }
 
     /++
@@ -459,6 +461,14 @@ mixin template _Message(TMessage)
     {
         this.body = body;
         return this;
+    }
+
+    /++
+        Gets the body of the message
+     +/
+    ref Variant[string] tags() return
+    {
+        return _tags;
     }
 }
 

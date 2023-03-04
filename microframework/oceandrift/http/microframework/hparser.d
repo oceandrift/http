@@ -11,8 +11,9 @@
 module oceandrift.http.microframework.hparser;
 
 import oceandrift.http.message : hstring;
-import oceandrift.http.microframework.kvp;
 import std.string : indexOf, strip;
+
+public import oceandrift.http.microframework.kvp;
 
 @safe pure nothrow @nogc:
 

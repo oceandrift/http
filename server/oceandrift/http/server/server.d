@@ -84,10 +84,11 @@ struct HTTPServer
                 }
 
                 // dfmt off
-                response = (keepAlive)
-                    ? response.withHeader!"Connection"("keep-alive")
-                    : response.withHeader!"Connection"("close")
-                ;
+                response.setHeader!"Connection"(
+                    (keepAlive)
+                        ? "keep-alive"
+                        : "close"
+                );
                 // dfmt on
 
                 try

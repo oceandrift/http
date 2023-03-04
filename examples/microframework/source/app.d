@@ -155,6 +155,10 @@ int main() @safe
                 long number;
             }
 
+            // set content-type + content charset
+            response.setHeader!"Content-Type"("text/html; charset=UTF-8");
+
+            // write HTML
             response.body_.write(
                 `<!DOCTYPE html><html><body><h1>oceandrift/http</h1>
                 <p>Microframework 'input validation' example</p>
@@ -227,6 +231,25 @@ int main() @safe
             response.body_.write("after 2\n");
             return response;
         });
+
+        // GET /cookie
+        router.get("/cookie",  delegate(Request request, Response response) {
+            // get Cookie from request
+            hstring cookieValue = request.getCookie("ExampleCookie");
+
+            // no value set?
+            if (cookieValue is null)
+            {
+                response.body_.write("ExampleCookie was not set previously.");
+
+                // set cookie
+                response.setCookie(Cookie("ExampleCookie", "1234"));
+                return response;
+            }
+
+            response.body_.write("ExampleCookie value: " ~ cookieValue);
+            return response;
+        }).add(cookiesMiddleware);
 
         // Not Found (HTTP Status 404)
         router.notFoundHandler = delegate(Request request, Response response) {
