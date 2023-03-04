@@ -4,14 +4,69 @@
 module oceandrift.http.microframework.form;
 
 import std.string : indexOf;
-import oceandrift.http.message : MultiBuffer, Request;
+import oceandrift.http.message : DataQ, Request, toArray;
 import oceandrift.http.microframework.multipart;
 import oceandrift.http.microframework.uri;
 
 public import oceandrift.http.message : hstring;
 public import oceandrift.http.microframework.kvp;
 
-@safe pure nothrow:
+@safe:
+
+private
+{
+    enum contentTypeMultipart = "multipart/form-data;";
+    enum contentTypeURLEncoded = "application/x-www-form-urlencoded";
+}
+
+/++
+    Standards:
+        https://www.rfc-editor.org/rfc/rfc7578
++/
+KeyValuePair[] formData(Request request)
+{
+    import std.string : startsWith;
+
+    hstring[] contentType = request.getHeader!"Content-Type";
+    if (contentType.length == 0)
+        return null;
+
+    // form urlencoded?
+    if (contentType[0] == contentTypeURLEncoded)
+        return parseFormDataURLEncoded(request.body_.toArray());
+
+    // multipart form?
+    if (contentType[0].startsWith(contentTypeMultipart))
+        return parseFormDataMultipart(contentType[0], request.body_);
+
+    return null;
+}
+
+/++
+    Standards:
+        https://www.rfc-editor.org/rfc/rfc7578
++/
+bool tryGetFormData(Request request, out KeyValuePair[] formData)
+{
+    hstring[] contentType = request.getHeader!"Content-Type";
+    if (contentType.length == 0)
+        return false;
+
+    // form urlencoded?
+    if (contentType[0] == contentTypeURLEncoded)
+    {
+        formData = parseFormDataURLEncoded(request.body_.toArray());
+        return true;
+    }
+
+    if (contentType[0][0 .. contentTypeMultipart.length] == contentTypeMultipart)
+    {
+        formData = parseFormDataMultipart(contentType[0], request.body_);
+        return true;
+    }
+
+    return false;
+}
 
 // TODO: range version
 
@@ -200,60 +255,6 @@ KeyValuePair[] queryParamsData(const Request request)
     return params;
 }
 
-private
-{
-    enum contentTypeMultipart = "multipart/form-data;";
-    enum contentTypeURLEncoded = "application/x-www-form-urlencoded";
-}
-
-/++
-    Standards:
-        https://www.rfc-editor.org/rfc/rfc7578
-+/
-KeyValuePair[] formData(Request request)
-{
-    import std.string : startsWith;
-
-    hstring[] contentType = request.getHeader!"Content-Type";
-    if (contentType.length == 0)
-        return null;
-
-    // form urlencoded?
-    if (contentType[0] == contentTypeURLEncoded)
-        return parseFormDataURLEncoded(request.body_.toString());
-
-    // multipart form?
-    if (contentType[0].startsWith(contentTypeMultipart))
-        return parseFormDataMultipart(contentType[0], request.body_);
-
-    return null;
-}
-/++
-    Standards:
-        https://www.rfc-editor.org/rfc/rfc7578
-+/
-bool tryGetFormData(Request request, out KeyValuePair[] formData)
-{
-    hstring[] contentType = request.getHeader!"Content-Type";
-    if (contentType.length == 0)
-        return false;
-
-    // form urlencoded?
-    if (contentType[0] == contentTypeURLEncoded)
-    {
-        formData = parseFormDataURLEncoded(request.body_.toString());
-        return true;
-    }
-
-    if (contentType[0][0 .. contentTypeMultipart.length] == contentTypeMultipart)
-    {
-        formData = parseFormDataMultipart(contentType[0], request.body_);
-        return true;
-    }
-
-    return false;
-}
-
 KeyValuePair[] parseFormDataURLEncoded(hstring bodyData)
 {
     KeyValuePair[] output = parseQueryString(bodyData);
@@ -264,7 +265,7 @@ KeyValuePair[] parseFormDataURLEncoded(hstring bodyData)
     return output;
 }
 
-KeyValuePair[] parseFormDataMultipart(const hstring contentType, ref MultiBuffer body)
+KeyValuePair[] parseFormDataMultipart(const hstring contentType, ref DataQ body)
 {
 
     hstring boundary = determineMultipartBoundary(contentType);

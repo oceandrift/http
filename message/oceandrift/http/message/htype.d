@@ -33,3 +33,21 @@ void popFront(ref hstring s)
 {
     s = s[1 .. $];
 }
+
+/// Emulate input range
+char front(const hbuffer s)
+{
+    return s[0];
+}
+
+/// ditto
+bool empty(const hbuffer s)
+{
+    return (s.length == 0);
+}
+
+/// ditto
+void popFront(ref hbuffer s)
+{
+    s = s[1 .. $];
+}

@@ -570,6 +570,11 @@ final class InMemoryDataQ : DataQ
         _mb = MultiBuffer(initialContent);
     }
 
+    public this(hstring initialContent) pure nothrow
+    {
+        _mb = MultiBuffer(initialContent);
+    }
+
     public this(MultiBuffer initialContent) pure nothrow @nogc
     {
         _mb = initialContent;
@@ -596,6 +601,11 @@ final class InMemoryDataQ : DataQ
     }
 
     void write(hbuffer input) pure nothrow
+    {
+        _mb.write(input);
+    }
+
+    void write(hstring input) pure nothrow
     {
         _mb.write(input);
     }
@@ -674,7 +684,9 @@ unittest
         assert(!dq.closed);
         assert(dq.empty);
         assert(dq.knownLength == 0);
-        dq.write([0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90]);
+        dq.write(cast(hbuffer)[
+                0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80, 0x90
+            ]);
         assert(!dq.empty);
         assert(dq.knownLength == 9);
     }
@@ -690,7 +702,7 @@ unittest
 
     DataQ dqCopy = (cast(InMemoryDataQ) dq).save();
 
-    dq.write([0xA0, 0xB0, 0xC0]);
+    dq.write(cast(hbuffer)[0xA0, 0xB0, 0xC0]);
 
     {
         ubyte[] b = new ubyte[](4);
@@ -703,7 +715,7 @@ unittest
         dq.copyTo(dq2);
 
         assert(dq.empty);
-        dq.write([0xD0, 0xE0]);
+        dq.write(cast(hbuffer)[0xD0, 0xE0]);
         assert(!dq.empty);
 
         ubyte[8] b;

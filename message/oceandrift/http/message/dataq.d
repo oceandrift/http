@@ -9,10 +9,6 @@
 
     Write operations always enqueue data on the end of the current queue.
     For read operations on the other hand it is possible to rewind to the beginning if the queue is rereadable.
-
-    This module defines a set of interfaces which enable all sorts of features for data queues.
-    [AnyDataQ] is the base for all of them.
-    [ReadableDataQ] enables reading; [WriteableDataQ] enables writing.
  +/
 module oceandrift.http.message.dataq;
 
@@ -48,10 +44,7 @@ interface DataQ
         Reads data into a buffer
 
         Returns:
-            $(LIST
-                * The number of bytes read
-                * or `< 0` on failure
-            *)
+            The number of bytes read
      +/
     size_t read(scope ubyte[]);
 
@@ -64,7 +57,7 @@ interface DataQ
                 * or `< 0` if the length $(B is not known)
             )
      +/
-    ptrdiff_t knownLength();
+    long knownLength();
 
     /++
         Rewinds the read-pointer to the start of the queue.
@@ -81,6 +74,37 @@ interface DataQ
         Enqueues the passed data
      +/
     void write(hbuffer);
+
+    /// ditto
+    void write(hstring);
+}
+
+hstring toArray(DataQ dataQ)
+{
+    immutable long length = dataQ.knownLength;
+
+    if (length == 0)
+        return null;
+
+    if (length > 0)
+    {
+        ubyte[] buffer = new ubyte[](length);
+        immutable size_t bytesRead = dataQ.read(buffer);
+        return cast(hstring) buffer[0 .. bytesRead];
+    }
+
+    size_t bytesReadTotal = 0;
+    ubyte[] buffer = new ubyte[](64);
+    while (true)
+    {
+        bytesReadTotal += dataQ.read(buffer[bytesReadTotal .. $]);
+        if (dataQ.empty)
+            break;
+
+        buffer.length += (buffer.length / 2);
+    }
+
+    return cast(hstring) buffer[0 .. bytesReadTotal];
 }
 
 ///
@@ -89,7 +113,6 @@ final class FileReaderDataQ : DataQ
     import std.stdio : File;
 
 @safe:
-
     private
     {
         File _file;
@@ -147,6 +170,11 @@ final class FileReaderDataQ : DataQ
     }
 
     void write(hbuffer)
+    {
+        assert(false);
+    }
+
+    void write(hstring)
     {
         assert(false);
     }

@@ -18,13 +18,13 @@ int main() @safe
 
         // print request headers to response
         response.body_.write(
-            "\n\n\n",
-            "Request Headers:\n",
-            "================\n",
+            "\n\n\n"
+            ~ "Request Headers:\n"
+            ~ "================\n"
         );
         foreach (Header h; request.headers)
             foreach (value; h.values)
-                response.body_.write(h.name, ": ", value, "\n");
+                response.body_.write(h.name ~ ": " ~ value ~ "\n");
 
         // return response with “content-type” + “server” headers
         return response

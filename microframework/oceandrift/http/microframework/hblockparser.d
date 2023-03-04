@@ -4,14 +4,20 @@
 module oceandrift.http.microframework.hblockparser;
 
 import oceandrift.http.microframework.hparser;
-import oceandrift.http.message : hbuffer, hstring, MultiBuffer, MultiBufferView;
+import oceandrift.http.message.htype;
 
 @safe pure nothrow:
 
 ///
-HeaderBlockParser!linebreak parseHeaderBlock(string linebreak = "\r\n")(MultiBufferView input)
+HeaderBlockParser!linebreak parseHeaderBlock(string linebreak = "\r\n")(hbuffer input)
 {
     return HeaderBlockParser!linebreak(input);
+}
+
+/// ditto
+HeaderBlockParser!linebreak parseHeaderBlock(string linebreak = "\r\n")(hstring input)
+{
+    return parseHeaderBlock!linebreak(cast(hbuffer) input);
 }
 
 struct HeaderBlockParser(string linebreak)
@@ -22,7 +28,7 @@ struct HeaderBlockParser(string linebreak)
 
     private
     {
-        MultiBufferView _input;
+        hbuffer _input;
 
         size_t _bytesRead = 0;
 
@@ -30,7 +36,7 @@ struct HeaderBlockParser(string linebreak)
         Header _front;
     }
 
-    this(MultiBufferView input)
+    this(hbuffer input)
     {
         _input = input;
         _empty = false;
@@ -91,7 +97,10 @@ struct HeaderBlockParser(string linebreak)
         _bytesRead += popN;
     }
 
-    auto input(){return _input;}// TODO
+    auto input()
+    {
+        return _input;
+    } // TODO
 
     ///
     size_t bytesRead() @nogc
@@ -135,9 +144,8 @@ version (unittest)
 
 unittest
 {
-    auto hbp = parseHeaderBlock(MultiBufferView(MultiBuffer(
-            "Content-Type: text/plain; charset=UTF-8\r\nCache-Control: no-cache, no-store\r\n\r\n"
-        ))
+    auto hbp = parseHeaderBlock(
+        "Content-Type: text/plain; charset=UTF-8\r\nCache-Control: no-cache, no-store\r\n\r\n"
     );
 
     assert(!hbp.empty);
@@ -158,9 +166,9 @@ unittest
 
 unittest
 {
-    auto hbp = parseHeaderBlock(MultiBufferView(
-            MultiBuffer(
-            "Content-Type: text/plain\r\nCache-Control: no-cache\r\n"))
+    auto hbp = parseHeaderBlock(
+
+        "Content-Type: text/plain\r\nCache-Control: no-cache\r\n"
     );
 
     assert(!hbp.empty);
@@ -177,10 +185,9 @@ unittest
 
 unittest
 {
-    auto hbp = parseHeaderBlock(MultiBufferView(
-            MultiBuffer(
-            "Content-Type: text/plain\r\n\r\nCache-Control: no-cache"
-        ))
+    auto hbp = parseHeaderBlock(
+
+        "Content-Type: text/plain\r\n\r\nCache-Control: no-cache"
     );
 
     assert(!hbp.empty);
@@ -192,7 +199,7 @@ unittest
 
 unittest
 {
-    auto hbp = parseHeaderBlock(MultiBufferView(MultiBuffer("Content-Type: text/plain")));
+    auto hbp = parseHeaderBlock("Content-Type: text/plain");
 
     assert(!hbp.empty);
     assert(compareHeader(hbp.front, "Content-Type", "text/plain", []));
@@ -203,9 +210,8 @@ unittest
 
 unittest
 {
-    auto hbp = parseHeaderBlock!"\n"(MultiBufferView(
-            MultiBuffer(
-            "Content-Type: text/plain\nCache-Control: no-cache\n\n"))
+    auto hbp = parseHeaderBlock!"\n"(
+        "Content-Type: text/plain\nCache-Control: no-cache\n\n"
     );
 
     assert(!hbp.empty);
@@ -222,14 +228,14 @@ unittest
 
 unittest
 {
-    auto hbp = parseHeaderBlock(MultiBufferView(MultiBuffer("\r\nContent-Type: text/plain")));
+    auto hbp = parseHeaderBlock("\r\nContent-Type: text/plain");
     assert(hbp.empty); // no header
     assert(hbp.bytesRead == 2);
 }
 
 unittest
 {
-    auto hbp = parseHeaderBlock(MultiBufferView(MultiBuffer("")));
+    auto hbp = parseHeaderBlock("");
     assert(hbp.empty);
     assert(hbp.bytesRead == 0);
 }

@@ -189,7 +189,7 @@ int main() @safe
                 // print a pretty error message
                 response.body_.write(`<h2 style="color: #F00">Validation failed</h2><p>Bad request</p><ul>`);
                 foreach (e; validationResult.errors)
-                    response.body_.write(`<li>`, e.field.idup, ": ", e.message.idup, `</li>`);
+                    response.body_.write(`<li>` ~ e.field ~ ": " ~ e.message ~ `</li>`);
                     // idup should be unnecessary once those are fixed:
                     // - https://issues.dlang.org/show_bug.cgi?id=23682
                     // - https://issues.dlang.org/show_bug.cgi?id=22916
@@ -200,13 +200,11 @@ int main() @safe
 
             MyData validData = validationResult.data;
 
-            response.body_.write(
-                `<h2>Validated User Message</h2><pre style="background:#EEE">`,
-                htmlEscape(validData.message).toHString, // always escape non-HTML data
-                `</pre><h2>Validated Number</h2><pre style="background:#EEE">`,
-                htmlEscape(validData.number.to!string).toHString,
-                `</pre></body></html>`,
-            );
+            response.body_.write(`<h2>Validated User Message</h2><pre style="background:#EEE">`);
+            response.body_.write(htmlEscape(validData.message).toHString); // always escape non-HTML data
+            response.body_.write(`</pre><h2>Validated Number</h2><pre style="background:#EEE">`);
+            response.body_.write(htmlEscape(validData.number.to!string).toHString);
+            response.body_.write(`</pre></body></html>`);
 
             return response;
         });

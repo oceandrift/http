@@ -127,7 +127,7 @@ int parseRequest(ref SocketConnection connection, out Request request)
             contentLengthLeft -= bufferReceived.length;
             reqBody.write(bufferReceived);
         }
-        catch (Exception ex)
+        catch (SocketTimeoutException ex)
             return 408;
 
         // Still a few body bytes left?
@@ -138,7 +138,7 @@ int parseRequest(ref SocketConnection connection, out Request request)
 
             try
                 buffer = connection.receiveAll(buffer);
-            catch (Exception ex)
+            catch (SocketTimeoutException ex)
                 return 408;
 
             // Append buffer to the body object

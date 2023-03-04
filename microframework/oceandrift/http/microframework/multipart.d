@@ -16,7 +16,7 @@ public import oceandrift.http.message : equalsCaseInsensitive, hstring;
 public import oceandrift.http.microframework.hparser : HeaderValue;
 public import oceandrift.http.microframework.kvp;
 
-@safe pure nothrow:
+@safe:
 
 private
 {
@@ -57,34 +57,38 @@ struct MultipartFile
     hbuffer data;
 }
 
-bool popCompare(ref MultiBufferView range, hbuffer expected) @nogc
+bool popCompare(ref DataQ dataQ, hbuffer expected)
 {
     while (expected.length > 0)
     {
-        if (range.empty)
+        if (dataQ.empty)
             return false; // (expected.length == 0) --> known to be false here
 
-        if (range.front != expected[0])
+        ubyte[1] b;
+        immutable size_t bytesRead = dataQ.read(b);
+        if (bytesRead != 1)
+            throw new Exception("Reading from non-empty DataQ failed");
+
+        if (b[0] != expected[0])
             return false;
 
-        range.popFront();
         expected = expected[1 .. $];
     }
 
     return true;
 }
 
-bool popCompare(ref MultiBufferView range, hstring expected) @nogc
+bool popCompare(ref DataQ dataQ, hstring expected)
 {
-    return popCompare(range, cast(hbuffer) expected);
+    return popCompare(dataQ, cast(hbuffer) expected);
 }
 
 unittest
 {
+    import oceandrift.http.message.multibuffer : InMemoryDataQ;
+
     hstring x = "01234567";
-    auto mb = MultiBuffer();
-    mb.write(x);
-    auto mbv = MultiBufferView(mb);
+    DataQ mbv = new InMemoryDataQ(cast(hbuffer) x);
 
     assert(mbv.popCompare("0123"));
     assert(mbv.popCompare("4"));
@@ -93,7 +97,7 @@ unittest
 }
 
 ///
-MultipartParser parseMultipart(MultiBuffer rawMultipartData, hstring boundary)
+MultipartParser parseMultipart(DataQ rawMultipartData, hstring boundary)
 {
     return MultipartParser(rawMultipartData, boundary);
 }
@@ -102,7 +106,7 @@ unittest
 {
     // real-world example, data synthesized using Firefox
     auto mpp = parseMultipart(
-        MultiBuffer(
+        new InMemoryDataQ(
             "-----------------------------31396618128806886144188844146"
             ~ "\r\nContent-Disposition: form-data; name=\"message\""
             ~ "\r\n"
@@ -135,7 +139,7 @@ unittest
 {
     // real-world example, data synthesized using Insomnia
     auto mpp = parseMultipart(
-        MultiBuffer(
+        new InMemoryDataQ(
             "--X-INSOMNIA-BOUNDARY"
             ~ "\r\nContent-Disposition: form-data; name=\"message\""
             ~ "\r\n\r\nhello"
@@ -172,7 +176,7 @@ unittest
 {
     // real-world example, data synthesized using Insomnia
     auto mpp = parseMultipart(
-        MultiBuffer(
+        new InMemoryDataQ(
             "--X-INSOMNIA-BOUNDARY"
             ~ "\r\nContent-Disposition: form-data; name=\"message\""
             ~ "\r\n"
@@ -277,7 +281,7 @@ unittest
 {
     // dfmt off
     auto mpp = parseMultipart(
-        MultiBuffer(cast(hbuffer)[
+        new InMemoryDataQ(cast(hbuffer)[
                 0x2D, 0x2D, 0x58, 0x2D, 0x49, 0x4E, 0x53, 0x4F, 0x4D, 0x4E, 0x49,
                 0x41, 0x2D, 0x42, 0x4F, 0x55, 0x4E, 0x44, 0x41, 0x52, 0x59, 0x0D,
                 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x44, 0x69,
@@ -330,21 +334,23 @@ unittest
 
 struct MultipartParser
 {
-@safe pure nothrow:
+@safe:
 
     private
     {
         hstring _boundary;
-        MultiBufferView _data;
+        DataQ _data;
 
         bool _empty = true;
         MultipartFile _front;
+
+        ubyte[] _buffer;
     }
 
-    this(MultiBuffer multipartData, hstring boundary)
+    this(DataQ multipartData, hstring boundary)
     {
         _boundary = boundary;
-        _data = MultiBufferView(multipartData);
+        _data = multipartData;
         _empty = false;
 
         popFrontInit();
@@ -363,16 +369,10 @@ struct MultipartParser
     private void popFrontInit()
     {
         if (!_data.popCompare("--")) // invalid?
-        {
-            _empty = true;
-            return;
-        }
+            return this.markEndOfData();
 
         if (!_data.popCompare(_boundary)) // invalid?
-        {
-            _empty = true;
-            return;
-        }
+            return this.markEndOfData();
 
         popFront();
     }
@@ -380,78 +380,110 @@ struct MultipartParser
     void popFront()
     {
         // after the boundary there should be a linebreak
-        if (!_data.popCompare(crlf)) // invalid?
+        if (_buffer.length < 2)
         {
-            _empty = true;
-            return;
+            if ((_data is null) || _data.empty)
+                return this.markEndOfData();
+
+            immutable size_t bytesInBuffer = _buffer.length;
+            _buffer.length += 2;
+            _data.read(_buffer[bytesInBuffer .. $]);
         }
 
-        _front = MultipartFile(); // parse header
-        auto headers = parseHeaderBlock(_data);
-        while (
-            !headers.empty)
+        // invalid?
+        if (_buffer[0 .. 2] != crlf)
+            return this.markEndOfData();
+
+        _buffer = _buffer[2 .. $];
+
+        _front = MultipartFile();
+
+        ubyte[] buffer = _buffer;
+        ubyte[] fileBuffer;
+        size_t bytesReadTotal = buffer.length;
+        buffer.length += 64;
+        while (true)
+        {
+            // faulty?
+            if ((_data is null) || _data.empty)
+                return this.markEndOfData();
+
+            bytesReadTotal += _data.read(buffer[bytesReadTotal .. $]);
+
+            // determine end of body
+            immutable ptrdiff_t idxEndOfBody = buffer.countUntil(
+                (cast(hbuffer) delimiterPrefix)
+                    .chain(cast(hbuffer) _boundary)
+            );
+
+            // end of body found?
+            if (idxEndOfBody >= 0)
+            {
+                fileBuffer = buffer[0 .. idxEndOfBody];
+
+                // determine how many bytes to skip (body + next delimiter), then skip
+                immutable bytesToSkip = idxEndOfBody + delimiterPrefix.length + _boundary.length;
+
+                // store leftover data in buffer
+                _buffer = buffer[bytesToSkip .. $];
+
+                // no leftovers?
+                if (_buffer.length == 0)
+                {
+                    // no more data to read?
+                    if (_data.empty) // faulty
+                        return this.markEndOfData();
+
+                    // allocate new buffer, store potential end-of-data marker
+                    _buffer = new ubyte[](2);
+                    size_t bytesRead = _data.read(buffer);
+
+                    // faulty?
+                    if (bytesRead != 2)
+                        return this.markEndOfData();
+                }
+
+                // end of data?
+                if (_buffer[0 .. 2] == "--")
+                {
+                    // prepare clean exit
+                    _buffer = null;
+
+                    // There should be a final CRLF,
+                    // but at this point it doesn’t really matter whether the data is conformant.
+                    // So, just replace the data object with null
+                    if (!_data.empty)
+                        _data = null;
+                }
+
+                break;
+            }
+
+            buffer.length += (buffer.length / 2);
+        }
+
+        // parse header
+        auto headers = parseHeaderBlock(fileBuffer);
+        while (!headers.empty)
         {
             // process header
-            enum lctCD = LowerCaseToken.makeConverted(
-                    "Content-Disposition");
-            enum lctCT = LowerCaseToken.makeConverted(
-                    "Content-Type");
-            enum lctCTE = LowerCaseToken.makeConverted(
-                    "Content-Transfer-Encoding");
+            enum lctCD = LowerCaseToken.makeConverted("Content-Disposition");
+            enum lctCT = LowerCaseToken.makeConverted("Content-Type");
+            enum lctCTE = LowerCaseToken.makeConverted("Content-Transfer-Encoding");
             if (equalsCaseInsensitive(headers.front.name, lctCD))
-                _front
-                    .contentDisposition = headers
-                    .front.value;
-            else if (
-                equalsCaseInsensitive(headers.front.name, lctCT))
-                _front
-                    .contentType = headers.front.value;
+                _front.contentDisposition = headers.front.value;
+            else if (equalsCaseInsensitive(headers.front.name, lctCT))
+                _front.contentType = headers.front.value;
             else if (equalsCaseInsensitive(headers.front.name, lctCTE))
-                _front
-                    .contentTransferEncoding = headers
-                    .front.value;
+                _front.contentTransferEncoding = headers.front.value;
             headers.popFront();
         }
 
         // pop header
-        foreach (idx; 0 .. headers.bytesRead)
-            _data.popFront(); // determine end of body
-        immutable ptrdiff_t idxEndOfBody = _data.countUntil(
-            (cast(hbuffer) delimiterPrefix)
-                .chain(cast(hbuffer) _boundary)
-        ); // no end marker?
-        if (idxEndOfBody < 0)
-        {
-            // faulty data
-            return this.markEndOfData();
-        }
+        fileBuffer = fileBuffer[headers.bytesRead .. $];
 
         // store body data
-        _front.data = _data[0 .. idxEndOfBody];
-
-        // determine how many bytes to skip (body + next delimiter), then skip
-        immutable bytesToSkip = idxEndOfBody + delimiterPrefix.length + _boundary
-            .length;
-        foreach (idx; 0 .. bytesToSkip)
-            _data.popFront(); // nothing left?
-        if (_data.empty) // faulty
-            return this.markEndOfData(); // potential end of data?
-        if (_data.front == '-')
-        {
-            _data.popFront(); // faulty?
-            if (_data.empty)
-                return this.markEndOfData(); // end of data?
-            if (_data.front == '-')
-            {
-                _data.popFront(); // prepare clean exit
-
-                // There should be a final CRLF,
-                // but at this point it doesn’t really matter whether the data is conformant.
-                // So, just replace the View (if it’s not already empty).
-                if (!_data.empty)
-                    _data = MultiBufferView();
-            }
-        }
+        _front.data = fileBuffer;
     }
 
     private void markEndOfData() @nogc
@@ -472,8 +504,7 @@ private hstring nameFromContentDisposition(
 {
     import oceandrift.http.microframework.hparser : parseHeaderValue;
 
-    foreach (KeyValuePair param; parseHeaderValue(
-            contentDisposition).params)
+    foreach (KeyValuePair param; parseHeaderValue(contentDisposition).params)
         if (param.key == "name")
             return param.value;
     return null;

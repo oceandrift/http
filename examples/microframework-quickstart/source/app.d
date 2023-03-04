@@ -7,7 +7,7 @@
     `--` separates DUB args (left) from the applications args (right).
     The parameter `-S <host>:<port>` specifies the listening address to use.
 
-    Feel free to replace `8080` with another port,
+    Feel free to replace `8080` with any other port,
     or `127.0.0.1` with your desired listening address (e.g. `[::1]` for IPv6).
  +/
 
@@ -31,8 +31,8 @@ int main(string[] args) @safe
         //  GET /something-else
         router.get("/:var", delegate(Request request, Response response, RouteMatchMeta meta) {
             response.body_.write(
-                "URI:\t", request.uri, "\n",
-                "Value:\t", meta.placeholders[0].value,
+                "URI:\t" ~ request.uri ~ "\n" ~
+                "Value:\t" ~ meta.placeholders[0].value
             );
             return response;
         });
