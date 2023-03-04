@@ -1,13 +1,9 @@
 /++
     HTTP Message abstraction and representation
 
-    This module’s design was inspired by “PSR-7: HTTP message interfaces”
+    This module’s design was inspired by [“PSR-7: HTTP message interfaces”](https://www.php-fig.org/psr/psr-7/)
     created by the PHP Framework Interoperability Group.
-
-    See_Also:
-    $(LIST
-        * https://www.php-fig.org/psr/psr-7/
-    )
+    Unlike PSR-7 messages are mutable, though.
 +/
 module oceandrift.http.message.messages;
 
@@ -237,14 +233,16 @@ mixin template _Message(TMessage)
 
     /++
         Sets the protocol version
-
-        Returns:
-            A new Message with the updated property
      +/
+    void protocol(hstring protocol)
+    {
+        this._protocol = protocol;
+    }
+
+    /// ditto
     TMessage withProtocol(hstring protocol)
     {
-        TMessage m = this;
-        m._protocol = protocol;
+        this.protocol = protocol;
         return this;
     }
 
@@ -298,25 +296,50 @@ mixin template _Message(TMessage)
     /++
         Sets the header with the specified name to the specified value(s)
 
-        Returns:
-            A new Message with the updated property
-
         ---
         // single value
-        response = response.withHeader!"Content-Type"("text/plain");
+        response.setHeader!"Content-Type"("text/plain");
 
         // multiple values
-        response = response.withHeader!"Access-Control-Allow-Headers"(["content-type", "authorization"]);
+        response.setHeader!"Access-Control-Allow-Headers"(["content-type", "authorization"]);
         ---
 
         See_Also:
-            [withAddedHeader]
+            $(LIST
+                * [addHeader]
+                * [withAddedHeader]
+            )
      +/
+    void setHeader(LowerCaseToken name, hstring value)
+    {
+        _headers.set(name, value);
+    }
+
+    /// ditto
+    void setHeader(LowerCaseToken name, hstring[] values)
+    {
+        _headers.set(name, values);
+    }
+
+    /// ditto
+    void setHeader(hstring name)(hstring value)
+    {
+        enum token = LowerCaseToken.makeConverted(name);
+        return this.setHeader(token, value);
+    }
+
+    /// ditto
+    void setHeader(hstring name)(hstring[] values)
+    {
+        enum token = LowerCaseToken.makeConverted(name);
+        return this.setHeader(token, values);
+    }
+
+    /// ditto
     TMessage withHeader(LowerCaseToken name, hstring value)
     {
-        TMessage m = this;
-        m._headers.set(name, value);
-        return m;
+        this.setHeader(name, value);
+        return this;
     }
 
     /// ditto
@@ -329,9 +352,8 @@ mixin template _Message(TMessage)
     /// ditto
     TMessage withHeader(LowerCaseToken name, hstring[] values)
     {
-        TMessage m = this;
-        m._headers.set(name, values);
-        return m;
+        this.setHeader(name, values);
+        return this;
     }
 
     /// ditto
@@ -344,25 +366,34 @@ mixin template _Message(TMessage)
     /++
         Appends the given value to the specified header
 
-        Returns:
-            A new Message with the updated property
-
         ---
-        response = response.withHeader!"Cache-Control"("no-cache"); // overrides existing any values
+        response.setHeader!"Cache-Control"("no-cache"); // overrides existing any values
 
-        response = response.withAddedHeader!"Cache-Control"("no-store"); // appends the new value
+        response.addHeader!"Cache-Control"("no-store"); // appends the new value
 
-        response = response.withAddedHeader!"Cache-Control"([
+        response.addHeader!"Cache-Control"([
             "private",
             "must-revalidate",
         ]); // appends the new values
         ---
      +/
+    void addHeader(LowerCaseToken name, hstring value)
+    {
+        _headers.append(name, value);
+    }
+
+    /// ditto
+    void addHeader(hstring name)(hstring value)
+    {
+        enum token = LowerCaseToken.makeConverted(name);
+        this.addHeader(token, value);
+    }
+
+    /// ditto
     TMessage withAddedHeader(LowerCaseToken name, hstring value)
     {
-        TMessage m = this;
-        m._headers.append(name, value);
-        return m;
+        this.addHeader(name, value);
+        return this;
     }
 
     /// ditto
@@ -375,19 +406,29 @@ mixin template _Message(TMessage)
     /++
         Removes the specified header from a message
 
-        Returns:
-            A new Message with the updated property
-
         ---
         // e.g. remove cookies from the response
-        response = response.withoutHeader!"Set-Cookie"();
+        response.unsetHeader!"Set-Cookie"();
+        response.withoutHeader!"Set-Cookie"();
         ---
      +/
+    void unsetHeader(LowerCaseToken name)
+    {
+        _headers.remove(name);
+    }
+
+    /// ditto
+    void unsetHeader(hstring name)()
+    {
+        enum token = LowerCaseToken.makeConverted(name);
+        return this.unsetHeader(token);
+    }
+
+    /// ditto
     TMessage withoutHeader(LowerCaseToken name)
     {
-        TMessage m = this;
-        m._headers.remove(name);
-        return m;
+        this.unsetHeader(name);
+        return this;
     }
 
     /// ditto
@@ -407,15 +448,17 @@ mixin template _Message(TMessage)
 
     /++
         Replaces the body of a message
-
-        Returns:
-            A new Message with the updated property
      +/
+    void body(DataQ body)
+    {
+        _body = body;
+    }
+
+    /// ditto
     TMessage withBody(DataQ body)
     {
-        TMessage m = this;
-        m._body = body;
-        return m;
+        this.body = body;
+        return this;
     }
 }
 
@@ -448,11 +491,16 @@ mixin template _Request(TRequest)
     /++
         Replaces the request method of the request
      +/
+    void method(hstring method)
+    {
+        _method = method;
+    }
+
+    /// ditto
     TRequest withMethod(hstring method)
     {
-        TRequest r = this;
-        r._method = method;
-        return r;
+        this.method = method;
+        return this;
     }
 
     /++
@@ -469,18 +517,20 @@ mixin template _Request(TRequest)
     /++
         Sets the URI of the request
 
-        Returns:
-            A new Request with the updated property
-
         ---
         request = request.withUri("/new-uri");
         ---
      +/
+    void uri(hstring uri)
+    {
+        _uri = uri;
+    }
+
+    /// ditto
     TRequest withUri(hstring uri)
     {
-        TRequest r = this;
-        r._uri = uri;
-        return r;
+        this.uri = uri;
+        return this;
     }
 }
 
@@ -507,25 +557,34 @@ mixin template _Response(TResponse)
         return _statusCode;
     }
 
-    /++
-        Sets the response’s HTTP status code
+    /// ditto
+    void statusCode(int code)
+    {
+        _statusCode = code;
+        _reasonPhrase = null;
+    }
 
-        Returns:
-            A new Response with the updated property
+    /++
+        Sets the response’s HTTP status code (+ reason phrase)
 
         ---
-        response = response.withStatus(404);
+        response.setStatus(404);
 
         // optionally with a custom reason-phrase
-        response = response.withStatus(404, "Not Found");
+        response.setStatus(404, "Not Found");
         ---
      +/
+    void setStatus(int code, hstring reasonPhrase = null)
+    {
+        _statusCode = code;
+        _reasonPhrase = reasonPhrase;
+    }
+
+    /// ditto
     TResponse withStatus(int code, hstring reasonPhrase = null)
     {
-        TResponse r = this;
-        r._statusCode = code;
-        r._reasonPhrase = reasonPhrase;
-        return r;
+        this.setStatus(code, reasonPhrase);
+        return this;
     }
 
     /++
@@ -559,6 +618,13 @@ struct Response
         this._statusCode = statusCode;
         this._reasonPhrase = reasonPhrase;
         this._body = new InMemoryDataQ();
+    }
+
+    this(int statusCode, hstring reasonPhrase, DataQ body)
+    {
+        this._statusCode = statusCode;
+        this._reasonPhrase = reasonPhrase;
+        this._body = body;
     }
 }
 
