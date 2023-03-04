@@ -5,7 +5,7 @@ module oceandrift.http.microframework.form;
 
 import std.string : indexOf;
 import oceandrift.http.message : DataQ, Request, toArray;
-import oceandrift.http.microframework.multipart;
+import oceandrift.http.microframework.parsing.multipart;
 import oceandrift.http.microframework.uri;
 
 public import oceandrift.http.message : hstring;

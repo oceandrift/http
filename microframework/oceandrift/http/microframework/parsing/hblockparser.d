@@ -1,9 +1,9 @@
 /++
     Extension of hparser to parse whole headers
  +/
-module oceandrift.http.microframework.hblockparser;
+module oceandrift.http.microframework.parsing.hblockparser;
 
-import oceandrift.http.microframework.hparser;
+import oceandrift.http.microframework.parsing.hparser;
 import oceandrift.http.message.htype;
 
 @safe pure nothrow:

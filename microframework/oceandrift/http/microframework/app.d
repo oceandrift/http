@@ -1,7 +1,7 @@
 module oceandrift.http.microframework.app;
 
 import core.runtime : Runtime;
-import oceandrift.http.microframework.router;
+import oceandrift.http.microframework.routing.router;
 import oceandrift.http.server;
 
 public import oceandrift.http.message : hbuffer, hstring, Request, Response;
@@ -10,7 +10,7 @@ public import oceandrift.http.microframework.form;
 public import oceandrift.http.microframework.html;
 public import oceandrift.http.microframework.kvp;
 public import oceandrift.http.microframework.middleware;
-public import oceandrift.http.microframework.router : Router, RoutedRequestHandler, RouteMatchMeta;
+public import oceandrift.http.microframework.routing.router : Router, RoutedRequestHandler, RouteMatchMeta;
 public import oceandrift.http.microframework.uri;
 public import oceandrift.http.microframework.validation;
 public import socketplate.address;

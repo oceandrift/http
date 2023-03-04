@@ -3,17 +3,17 @@
 
     Currently limited to multipart/form-data.
  +/
-module oceandrift.http.microframework.multipart;
+module oceandrift.http.microframework.parsing.multipart;
 
 import std.algorithm : countUntil;
 import std.range : chain;
 import std.string : indexOf;
 import oceandrift.http.message;
-import oceandrift.http.microframework.hblockparser : parseHeaderBlock;
+import oceandrift.http.microframework.parsing.hblockparser : parseHeaderBlock;
 import oceandrift.http.microframework.uri;
 
 public import oceandrift.http.message : equalsCaseInsensitive, hstring;
-public import oceandrift.http.microframework.hparser : HeaderValue;
+public import oceandrift.http.microframework.parsing.hparser : HeaderValue;
 public import oceandrift.http.microframework.kvp;
 
 @safe:
@@ -175,6 +175,7 @@ unittest
 unittest
 {
     // real-world example, data synthesized using Insomnia
+    // slightly modified to workaround https://forum.dlang.org/thread/iinxumvuwchptatlzfzp@forum.dlang.org
     auto mpp = parseMultipart(
         new InMemoryDataQ(
             "--X-INSOMNIA-BOUNDARY"
@@ -192,7 +193,7 @@ unittest
             ~ "\r\n/++"
             ~ "\n    Multipart data handling"
             ~ "\n +/"
-            ~ "\nmodule oceandrift.http.microframework.multipart;"
+            ~ "\n//module oceandrift.http.microframework.multipart;"
             ~ "\n"
             ~ "\n@safe pure nothrow:"
             ~ "\n"
@@ -216,7 +217,7 @@ unittest
             ~ "\n    <Key>: <main-value>; <param1>; <param2>; <param3>; …"
             ~ "\n    ---"
             ~ "\n +/"
-            ~ "\nmodule oceandrift.http.microframework.hparser;"
+            ~ "\n//module oceandrift.http.microframework.hparser;"
             ~ "\n"
             ~ "\nimport oceandrift.http.message : hstring;"
             ~ "\nimport oceandrift.http.microframework.kvp;"
@@ -259,7 +260,7 @@ unittest
     assert(mpp.front.contentDisposition.params.front == KeyValuePair("filename", "multipart.d"));
     assert(mpp.front.contentType.main == "application/octet-stream");
     assert(mpp.front.contentType.params.empty);
-    assert(mpp.front.data.length == 180);
+    assert(mpp.front.data.length == 182);
 
     mpp.popFront();
     assert(!mpp.empty);
@@ -271,7 +272,7 @@ unittest
     assert(mpp.front.contentDisposition.params.front == KeyValuePair("filename", "hparser.d"));
     assert(mpp.front.contentType.main == "application/octet-stream");
     assert(mpp.front.contentType.params.empty);
-    assert(mpp.front.data.length == 443);
+    assert(mpp.front.data.length == 445);
 
     mpp.popFront();
     assert(mpp.empty);
@@ -502,7 +503,7 @@ private hstring parseMultipartHeaderValue(
 private hstring nameFromContentDisposition(
     hstring contentDisposition) @nogc
 {
-    import oceandrift.http.microframework.hparser : parseHeaderValue;
+    import oceandrift.http.microframework.parsing.hparser : parseHeaderValue;
 
     foreach (KeyValuePair param; parseHeaderValue(contentDisposition).params)
         if (param.key == "name")
@@ -512,7 +513,7 @@ private hstring nameFromContentDisposition(
 
 hstring determineMultipartBoundary(const hstring contentType) @nogc
 {
-    import oceandrift.http.microframework.hparser : parseHeaderValue;
+    import oceandrift.http.microframework.parsing.hparser : parseHeaderValue;
 
     foreach (param; parseHeaderValue(contentType).params)
         if (param.key == "boundary")

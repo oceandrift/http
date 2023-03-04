@@ -26,7 +26,7 @@
         Route placeholders are called $(B wildcards) internally.
     )
  +/
-module oceandrift.http.microframework.routetree;
+module oceandrift.http.microframework.routing.routetree;
 
 import std.string : indexOf;
 import oceandrift.http.message : hstring, Request, Response;

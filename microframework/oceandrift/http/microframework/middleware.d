@@ -1,8 +1,9 @@
 module oceandrift.http.microframework.middleware;
 
-import oceandrift.http.microframework.routetree : RoutedRequestHandler;
+import oceandrift.http.microframework.routing.router : RoutedRequestHandler;
+
 public import oceandrift.http.message : Request, Response;
-public import oceandrift.http.microframework.routetree : RouteMatchMeta;
+public import oceandrift.http.microframework.routing.router : RouteMatchMeta;
 public import oceandrift.http.server : RequestHandler;
 
 @safe:

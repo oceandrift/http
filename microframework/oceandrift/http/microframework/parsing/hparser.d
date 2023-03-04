@@ -8,7 +8,7 @@
     <Key>: <main-value>; <param1>; <param2>; <param3>; …
     ---
  +/
-module oceandrift.http.microframework.hparser;
+module oceandrift.http.microframework.parsing.hparser;
 
 import oceandrift.http.message : hstring;
 import std.string : indexOf, strip;
