@@ -98,6 +98,8 @@ struct HTTPServer
 
                 if (!keepAlive)
                     return;
+
+                logTrace("Keep-Alive");
             }
         }
         catch (SocketTimeoutException ex)
@@ -170,9 +172,11 @@ void listenHTTP(
 /// ditto
 void listenHTTP(SocketServer server, string listenOn, RequestHandler requestHandler, Tunables tunables = Tunables())
 {
-    scope (success)
-        logInfo("oceandrift/http: will listen on http://" ~ listenOn);
-    return server.listenTCP(listenOn, makeHTTPServer(requestHandler, tunables));
+    SocketAddress sockAddr;
+    if (!parseSocketAddress(listenOn, sockAddr))
+        throw new Exception("Bad listening address specified: ", listenOn);
+
+    return listenHTTP(server, sockAddr, requestHandler, tunables);
 }
 
 ConnectionHandler makeHTTPServer(RequestHandler requestHandler, Tunables tunables) nothrow

@@ -41,30 +41,30 @@ alias RoutedRequestHandler = Response delegate(
 ) @safe;
 
 ///
-struct RouteTreeLink
+struct RouteTreeLink(TLeaf)
 {
     string component = null;
-    RouteTreeNode* node;
+    RouteTreeNode!TLeaf* node;
 }
 
 ///
-struct RouteTreeNode
+struct RouteTreeNode(TLeaf = RoutedRequestHandler)
 {
-    RoutedRequestHandler requestHandler = null;
+    TLeaf requestHandler;
 
-    RouteTreeLink[] branches;
-    RouteTreeLink wildcard;
+    RouteTreeLink!(TLeaf)[] branches;
+    RouteTreeLink!TLeaf wildcard;
 }
 
 ///
-void addRoute(RouteTreeNode* root, string url, RoutedRequestHandler requestHandler)
+void addRoute(TLeaf)(RouteTreeNode!TLeaf* root, string url, TLeaf requestHandler)
 in (root !is null)
 in (url[0] == '/')
 {
     return addRouteTreeNode(root, url[1 .. $], requestHandler);
 }
 
-private void addRouteTreeNode(RouteTreeNode* tree, string url, RoutedRequestHandler requestHandler)
+private void addRouteTreeNode(TLeaf)(RouteTreeNode!TLeaf* tree, string url, TLeaf requestHandler)
 {
     if (url.length == 0)
     {
@@ -83,7 +83,7 @@ private void addRouteTreeNode(RouteTreeNode* tree, string url, RoutedRequestHand
 
         if (tree.wildcard.node is null) // insert
         {
-            tree.wildcard.node = new RouteTreeNode();
+            tree.wildcard.node = new RouteTreeNode!TLeaf();
 
             if (endOfWildcard < 0) // end of url reached
             {
@@ -158,8 +158,8 @@ private void addRouteTreeNode(RouteTreeNode* tree, string url, RoutedRequestHand
         {
             if (branch.component.length > url.length)
             {
-                auto replacementNode = new RouteTreeNode(requestHandler, [
-                        RouteTreeLink(branch.component[shorter.length .. $], branch.node) // link to existing node
+                auto replacementNode = new RouteTreeNode!TLeaf(requestHandler, [
+                        RouteTreeLink!TLeaf(branch.component[shorter.length .. $], branch.node) // link to existing node
                     ]
                 );
 
@@ -176,8 +176,8 @@ private void addRouteTreeNode(RouteTreeNode* tree, string url, RoutedRequestHand
 
         // mismatch found, → split
 
-        auto replacementNode = new RouteTreeNode(null, [
-                RouteTreeLink(branch.component[idxSplit .. $], branch.node) // link to existing node
+        auto replacementNode = new RouteTreeNode!TLeaf(null, [
+                RouteTreeLink!TLeaf(branch.component[idxSplit .. $], branch.node) // link to existing node
             ]
         );
 
@@ -193,13 +193,13 @@ private void addRouteTreeNode(RouteTreeNode* tree, string url, RoutedRequestHand
     immutable nextWildcard = url.indexOf(':');
     if (nextWildcard < 0) // no wildcard left, simple insert
     {
-        tree.branches ~= RouteTreeLink(url, new RouteTreeNode(requestHandler));
+        tree.branches ~= RouteTreeLink!TLeaf(url, new RouteTreeNode!TLeaf(requestHandler));
         return;
     }
 
-    auto beforeWildcard = new RouteTreeNode();
+    auto beforeWildcard = new RouteTreeNode!TLeaf();
     addRouteTreeNode(beforeWildcard, url[nextWildcard .. $], requestHandler);
-    tree.branches ~= RouteTreeLink(url[0 .. nextWildcard], beforeWildcard);
+    tree.branches ~= RouteTreeLink!TLeaf(url[0 .. nextWildcard], beforeWildcard);
     return;
 }
 
@@ -214,7 +214,7 @@ unittest
     RoutedRequestHandler rh3 = delegate(Request, Response r, RouteMatchMeta) { return r.withStatus(203); };
     // dfmt on
 
-    auto routerRoot = new RouteTreeNode();
+    auto routerRoot = new RouteTreeNode!RoutedRequestHandler();
 
     routerRoot.addRoute("/hello", rh0);
     assert(routerRoot.requestHandler is null);
@@ -410,7 +410,7 @@ unittest
     RoutedRequestHandler rh0 = delegate(Request, Response r, RouteMatchMeta) {
         return r;
     };
-    auto routerRoot = new RouteTreeNode();
+    auto routerRoot = new RouteTreeNode!RoutedRequestHandler();
 
     assertThrown!Error(routerRoot.addRoute(":id/", rh0));
 
@@ -429,24 +429,24 @@ struct RouteMatchMeta
     KeyValuePair[] placeholders;
 }
 
-struct RouteMatchResult
+struct RouteMatchResult(TLeaf)
 {
-    RoutedRequestHandler requestHandler;
+    TLeaf requestHandler;
     RouteMatchMeta meta;
 }
 
 ///
-RouteMatchResult match(RouteTreeNode* root, hstring url)
+RouteMatchResult!TLeaf match(TLeaf)(RouteTreeNode!TLeaf* root, hstring url)
 {
     if (url[0] != '/')
-        return RouteMatchResult(null);
+        return RouteMatchResult!TLeaf(null);
 
-    RouteMatchResult output;
-    output.requestHandler = matchRoute(root, url[1 .. $], output.meta);
+    RouteMatchResult!TLeaf output;
+    output.requestHandler = matchRoute!TLeaf(root, url[1 .. $], output.meta);
     return output;
 }
 
-private RoutedRequestHandler matchRoute(RouteTreeNode* tree, hstring url, ref RouteMatchMeta routeMatchMeta)
+private TLeaf matchRoute(TLeaf)(RouteTreeNode!TLeaf* tree, hstring url, ref RouteMatchMeta routeMatchMeta)
 {
     // direct match?
     if (url.length == 0)
@@ -497,7 +497,7 @@ unittest
     RoutedRequestHandler rhVisitors = delegate(Request, Response r, RouteMatchMeta) { return r; };
     // dfmt on
 
-    auto routerRoot = new RouteTreeNode(rhRoot);
+    auto routerRoot = new RouteTreeNode!RoutedRequestHandler(rhRoot);
 
     routerRoot.addRoute("/hello", rhHello);
     routerRoot.addRoute("/hello/world", rhHelloWorld);

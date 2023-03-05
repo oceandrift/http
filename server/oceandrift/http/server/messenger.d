@@ -157,7 +157,8 @@ int parseRequest(ref SocketConnection connection, out Request request)
 void sendResponse(ref SocketConnection connection, Response response)
 {
     scope (exit)
-        response.body_.close();
+        if (response.body_ !is null)
+            response.body_.close();
 
     connection.send("HTTP/1.1 ");
     connection.send(response.statusCode.to!string);
@@ -178,6 +179,18 @@ void sendResponse(ref SocketConnection connection, Response response)
             connection.send(value);
             connection.send(CRLF);
         }
+    }
+
+    // no body?
+    if (response.body_ is null)
+    {
+        // set content-length header to zero if it hasn’t been set yet
+        // don’t override because HEAD requests
+        if (!response.hasHeader!"Content-Length")
+            response.setHeader!"Content-Length" = "0";
+
+        connection.send(CRLFCRLF);
+        return;
     }
 
     // no known body length?
