@@ -268,6 +268,29 @@ int main() @safe
             return response;
         }).add(cookiesMiddleware);
 
+        // Setup a Route Group (“sub-router”)
+        router.group("/group", delegate(Router group) {
+            // define sub-routes here
+
+            // GET /group/
+            group.get("/", delegate(Request request, Response response) {
+                response.body.write("Hello Group");
+                return response;
+            });
+
+            // GET /group/foo
+            group.get("/foo", delegate(Request request, Response response) {
+                response.body.write("bar");
+                return response;
+            });
+
+            // POST /group/foo
+            group.post("/foo", delegate(Request request, Response response) {
+                response.body.write("bar (POST)");
+                return response;
+            });
+        });
+
         // Not Found (HTTP Status 404)
         router.notFoundHandler = delegate(Request request, Response response) {
             response.body.write("Not Found :(");

@@ -3,13 +3,13 @@
  +/
 module oceandrift.http.microframework.routing.router;
 
-import std.conv : to;
-import std.sumtype;
 import oceandrift.http.message;
 import oceandrift.http.microframework.routing.middleware;
 import oceandrift.http.microframework.routing.routetree;
 import oceandrift.http.microframework.uri;
 import oceandrift.http.server : RequestHandler, HTTPServer;
+import std.conv : to;
+import std.sumtype;
 
 public import oceandrift.http.microframework.routing.routetree : RoutedRequestHandler, RouteMatchMeta;
 
@@ -30,11 +30,15 @@ RequestHandler makeRouterRequestHandler(out Router router)
     return &router.handleRequest;
 }
 
+///
 alias MethodNotAllowedHandler = Response delegate(
     Request request,
     Response response,
     string[] allow,
 ) @safe;
+
+///
+alias RouteGroupSetupCallback = void delegate(Router) @safe;
 
 /++
     HTTP Request Method (“verb”)
@@ -159,27 +163,33 @@ private:
     RoutedRequestHandler _targetR;
 }
 
-private struct OptionsRequestMethodsImpl
+private
 {
-    string[] methods;
-    RoutedRequestHandler customHandler = null; // TODO: cannot be set currently
-
-    private string _methodsString = null;
-
-    string methodsString()
+    struct OptionsRequestMethodsArray
     {
-        if (_methodsString is null)
+        string[] methods;
+        RoutedRequestHandler customHandler = null; // TODO: cannot be set currently
+
+        private string _methodsString = null;
+
+        string methodsString()
         {
-            _methodsString = methods[0];
-            foreach (method; methods[1 .. $])
-                _methodsString ~= ", " ~ method;
+            if (_methodsString is null)
+            {
+                _methodsString = methods[0];
+                foreach (method; methods[1 .. $])
+                    _methodsString ~= ", " ~ method;
+            }
+
+            return _methodsString;
         }
-
-        return _methodsString;
     }
-}
 
-private alias OptionsRequestMethods = OptionsRequestMethodsImpl*;
+    alias OptionsRequestMethodsImpl = SumType!(RoutedRequestHandler, OptionsRequestMethodsArray);
+
+    // is a pointer to make it nullable
+    alias OptionsRequestMethods = OptionsRequestMethodsImpl*;
+}
 
 private struct Routes
 {
@@ -240,31 +250,31 @@ final class Router
     }
 
     ///
-    Response handleRequest(hstring uri, Request request, Response response)
+    Response handleRequest(hstring uri, Request request, Response response, RouteMatchMeta meta = RouteMatchMeta())
     {
         if (request.method.length < 3)
             return this.handle404(request, response);
 
         if (request.method == "GET")
         {
-            return this.matchURL(_routes.get, uri, request, response);
+            return this.matchURL(_routes.get, uri, request, response, meta);
         }
         else if (request.method[0] == 'P')
         {
             if (request.method[1 .. $] == "OST")
-                return this.matchURL(_routes.post, uri, request, response);
+                return this.matchURL(_routes.post, uri, request, response, meta);
             if (request.method[1 .. $] == "UT")
-                return this.matchURL(_routes.put, uri, request, response);
+                return this.matchURL(_routes.put, uri, request, response, meta);
             if (request.method[1 .. $] == "ATCH")
-                return this.matchURL(_routes.patch, uri, request, response);
+                return this.matchURL(_routes.patch, uri, request, response, meta);
         }
         else if (request.method == "OPTIONS")
         {
-            return handleOptionsRequest(uri, request, response);
+            return this.handleOptionsRequest(uri, request, response);
         }
         else if (request.method == "HEAD")
         {
-            return this.handleHeadRequest(uri, request, response);
+            return this.handleHeadRequest(uri, request, response, meta);
         }
 
         // unknown method
@@ -349,6 +359,29 @@ final class Router
         return addRoute!"put"(urlPattern, handler);
     }
 
+    ///
+    Route group(string urlPattern, RouteGroupSetupCallback setup)
+    in (urlPattern.length > 0)
+    {
+        if (urlPattern[$ - 1] != '*')
+            urlPattern ~= '*';
+
+        // create route
+        // inherit not-found + method-not-allowed handlers from parent
+        auto r = new Route(
+            null,
+            makeGroup((Router router) { this.setupChildRouter(router, setup); })
+        );
+
+        _routes.delete_.addRoute(urlPattern, &r.handleRequest);
+        _routes.get.addRoute(urlPattern, &r.handleRequest);
+        _routes.patch.addRoute(urlPattern, &r.handleRequest);
+        _routes.post.addRoute(urlPattern, &r.handleRequest);
+        _routes.put.addRoute(urlPattern, &r.handleRequest);
+        registerRouteOptions(urlPattern, &r.handleRequest);
+        return r;
+    }
+
 private:
 
     Route addRoute(string httpMethod)(string urlPattern, RoutedRequestHandler handlerR)
@@ -366,9 +399,17 @@ private:
         pragma(inline, true);
 
         auto r = new Route(handler, handlerR);
-        mixin("_routes." ~ httpMethod ~ ".addRoute(urlPattern, &r.handleRequest);");
+        mixin("_routes." ~ httpMethod).addRoute(urlPattern, &r.handleRequest);
 
         // collect methods for OPTION requests (and error 405 messages)
+        registerRouteOptions!httpMethod(urlPattern);
+
+        return r;
+    }
+
+    // regular route
+    void registerRouteOptions(string httpMethod)(string urlPattern)
+    {
         {
             RouteMatchResult!OptionsRequestMethods r405 = _routes.options.match(urlPattern);
             enum HTTPMethod method = mixin(`HTTPMethod.` ~ httpMethod);
@@ -376,10 +417,18 @@ private:
             // known route? i.e. have there been any allowed request methods registered yet?
             if (r405.requestHandler !is null)
             {
-                static if (method == HTTPMethod.get)
-                    r405.requestHandler.methods ~= "HEAD";
-
-                r405.requestHandler.methods ~= method.toOptionsString;
+                // dfmt off
+                (*r405.requestHandler).match!(
+                    (ref OptionsRequestMethodsArray a) {
+                        static if (method == HTTPMethod.get)
+                            a.methods ~= "HEAD";
+                        a.methods ~= method.toOptionsString;
+                    },
+                    (ref RoutedRequestHandler) {
+                        assert(false);
+                    }
+                );
+                // dfmt on
             }
             else
             {
@@ -399,15 +448,33 @@ private:
 
                 _routes.options.addRoute(
                     urlPattern,
-                    new OptionsRequestMethodsImpl(methods)
+                    new OptionsRequestMethodsImpl(OptionsRequestMethodsArray(methods))
                 );
             }
         }
-
-        return r;
     }
 
-    Response matchURL(RouteTreeNode!RoutedRequestHandler* root, hstring url, Request request, Response response)
+    // group route
+    void registerRouteOptions(string urlPattern, RoutedRequestHandler requestHandler)
+    {
+        RouteMatchResult!OptionsRequestMethods r405 = _routes.options.match(urlPattern);
+
+        if (r405.requestHandler !is null)
+            assert(false);
+
+        _routes.options.addRoute(
+            urlPattern,
+            new OptionsRequestMethodsImpl(requestHandler)
+        );
+    }
+
+    Response matchURL(
+        RouteTreeNode!RoutedRequestHandler* root,
+        hstring url,
+        Request request,
+        Response response,
+        RouteMatchMeta meta,
+    )
     {
         RouteMatchResult!RoutedRequestHandler r = root.match(url);
 
@@ -415,8 +482,12 @@ private:
         if (r.requestHandler is null)
             return this.handleUnknown(url, request, response);
 
-        // match
-        return r.requestHandler(request, response, r.meta);
+        // --> match
+
+        // merge meta data
+        meta = RouteMatchMeta.merge(meta, r.meta);
+
+        return r.requestHandler(request, response, meta);
     }
 
     Response handle404(Request request, Response response)
@@ -433,20 +504,22 @@ private:
 
     Response handle405(Request request, Response response, OptionsRequestMethods options)
     {
-        // prepare default response
-        response.statusCode = 405;
-        response.setHeader!"Allow" = options.methodsString;
+        return (*options).match!((OptionsRequestMethodsArray options) {
+            // prepare default response
+            response.statusCode = 405;
+            response.setHeader!"Allow" = options.methodsString;
 
-        // custom handler?
-        if (_405 !is null)
-            return _405(request, response, options.methods);
+            // custom handler?
+            if (_405 !is null)
+                return _405(request, response, options.methods);
 
-        return response;
+            return response;
+        }, (RoutedRequestHandler) { assert(false); return Response(); });
     }
 
-    Response handleHeadRequest(hstring uri, Request request, Response response)
+    Response handleHeadRequest(hstring uri, Request request, Response response, RouteMatchMeta meta)
     {
-        response = this.matchURL(_routes.get, uri, request, response);
+        response = this.matchURL(_routes.get, uri, request, response, meta);
 
         // has body?
         if (response.body !is null)
@@ -465,24 +538,34 @@ private:
         return response;
     }
 
+    // Handle HTTP OPTIONS request
     Response handleOptionsRequest(hstring uri, Request request, Response response)
     {
         // determine route
-        RouteMatchResult!OptionsRequestMethods match = _routes.options.match(uri);
+        RouteMatchResult!OptionsRequestMethods matching = _routes.options.match(uri);
 
         // not found?
-        if (match.requestHandler is null)
+        if (matching.requestHandler is null)
             return handle404(request, response);
 
-        // prepare default response
-        response.statusCode = 204;
-        response.setHeader!"Allow" = match.requestHandler.methodsString;
+        // dfmt off
+        return (*matching.requestHandler).match!(
+            (ref OptionsRequestMethodsArray a) {
+                // prepare default response
+                response.statusCode = 204;
+                response.setHeader!"Allow" = a.methodsString;
 
-        // call custom handler if applicable
-        if (match.requestHandler.customHandler !is null)
-            response = match.requestHandler.customHandler(request, response, match.meta);
+                // call custom handler if applicable
+                if (a.customHandler !is null)
+                    return a.customHandler(request, response, matching.meta);
 
-        return response;
+                return response;
+            },
+            (ref RoutedRequestHandler requestHandler) {
+                return requestHandler(request, response, matching.meta);
+            },
+        );
+        // dfmt on
     }
 
     Response handleUnknown(hstring uri, Request request, Response response)
@@ -496,4 +579,76 @@ private:
         // error 404
         return this.handle404(request, response);
     }
+
+    // setup not-found/method-allowed handlers for child routers
+    void setupChildRouter(Router router, RouteGroupSetupCallback callback)
+    {
+        // use parent router handlers by default
+        // those can’t be assigned directly, because that wouldn’t reflect later updates of those handlers
+        router.notFoundHandler = &this.notFoundHandlerProxy;
+        router.methodNotAllowedHandler = &this.methodNotAllowedHandlerProxy;
+
+        // call setup callback
+        return callback(router);
+    }
+
+    // for child routers
+    Response notFoundHandlerProxy(Request request, Response response)
+    {
+        return _404(request, response);
+    }
+
+    // for child routers
+    Response methodNotAllowedHandlerProxy(Request request, Response response, string[] allow)
+    {
+        return _405(request, response, allow);
+    }
+}
+
+/++
+    Route Group: child router helper
+ +/
+struct RouteGroup
+{
+    private
+    {
+        Router _router;
+    }
+
+    private this(Router router) pure nothrow @nogc
+    {
+        _router = router;
+    }
+
+    Response handleRequest(Request request, Response response, RouteMatchMeta meta)
+    {
+        debug assert(meta.placeholders.length > 0);
+
+        RouteMatchMeta newMeta = meta;
+        newMeta.placeholders.length -= 1;
+
+        hstring uri;
+        foreach (idx, placeholder; meta.placeholders)
+        {
+            // is deep wildcard?
+            if (placeholder.key == "*")
+            {
+                uri = placeholder.value;
+                newMeta.placeholders[idx .. $] = meta.placeholders[idx + 1 .. $];
+                return _router.handleRequest(uri, request, response, newMeta);
+            }
+        }
+
+        assert(false, "Invalid use of request group: no *-URI in meta");
+    }
+}
+
+///
+RoutedRequestHandler makeGroup(RouteGroupSetupCallback setup)
+{
+    auto router = new Router();
+    setup(router);
+
+    auto group = new RouteGroup(router);
+    return &group.handleRequest;
 }

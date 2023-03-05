@@ -471,9 +471,17 @@ unittest
     assertThrown!Error(routerRoot.addRoute("/2000", rh0));
 }
 
+///
 struct RouteMatchMeta
 {
+    ///
     KeyValuePair[] placeholders;
+
+    ///
+    static typeof(this) merge(RouteMatchMeta a, RouteMatchMeta b)
+    {
+        return RouteMatchMeta(a.placeholders ~ b.placeholders);
+    }
 }
 
 struct RouteMatchResult(TLeaf)
@@ -485,6 +493,9 @@ struct RouteMatchResult(TLeaf)
 ///
 RouteMatchResult!TLeaf match(TLeaf)(RouteTreeNode!TLeaf* root, hstring url)
 {
+    if (url.length == 0)
+        return RouteMatchResult!TLeaf(null);
+
     if (url[0] != '/')
         return RouteMatchResult!TLeaf(null);
 
