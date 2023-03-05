@@ -157,8 +157,8 @@ int parseRequest(ref SocketConnection connection, out Request request)
 void sendResponse(ref SocketConnection connection, Response response)
 {
     scope (exit)
-        if (response.body_ !is null)
-            response.body_.close();
+        if (response.body !is null)
+            response.body.close();
 
     connection.send("HTTP/1.1 ");
     connection.send(response.statusCode.to!string);
@@ -182,7 +182,7 @@ void sendResponse(ref SocketConnection connection, Response response)
     }
 
     // no body?
-    if (response.body_ is null)
+    if (response.body is null)
     {
         // set content-length header to zero if it hasn’t been set yet
         // don’t override because HEAD requests
@@ -194,13 +194,13 @@ void sendResponse(ref SocketConnection connection, Response response)
     }
 
     // no known body length?
-    immutable long contentLength = response.body_.knownLength;
+    immutable long contentLength = response.body.knownLength;
     if (contentLength < 0)
     {
         // no, send chunked
         connection.send("transfer-encoding: chunked");
         connection.send(CRLFCRLF);
-        sendResponseBodyChunked(connection, response.body_);
+        sendResponseBodyChunked(connection, response.body);
     }
     else
     {
@@ -208,7 +208,7 @@ void sendResponse(ref SocketConnection connection, Response response)
         connection.send("content-length: ");
         connection.send(contentLength.to!hstring);
         connection.send(CRLFCRLF);
-        sendResponseBodyAtOnce(connection, response.body_);
+        sendResponseBodyAtOnce(connection, response.body);
     }
 }
 

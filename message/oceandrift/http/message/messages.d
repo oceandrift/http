@@ -443,7 +443,7 @@ mixin template _Message(TMessage)
     /++
         Gets the body of the message
      +/
-    ref DataQ body_() return
+    ref DataQ body() return
     {
         return _body;
     }

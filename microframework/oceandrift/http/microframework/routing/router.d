@@ -445,10 +445,10 @@ private:
         response = this.matchURL(_routes.get, request.uri, request, response);
 
         // has body?
-        if (response.body_ !is null)
+        if (response.body !is null)
         {
             // determine length
-            immutable long contentLength = response.body_.knownLength;
+            immutable long contentLength = response.body.knownLength;
 
             // length available?
             if (contentLength >= 0)

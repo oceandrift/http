@@ -21,7 +21,7 @@ int main(string[] args) @safe
         // GET /
         router.get("/", delegate(Request request, Response response) {
             // respond with "Hello world :)"
-            response.body_.write("Hello world :)");
+            response.body.write("Hello world :)");
             return response;
         });
 
@@ -30,7 +30,7 @@ int main(string[] args) @safe
         //  GET /anything
         //  GET /something-else
         router.get("/:var", delegate(Request request, Response response, RouteMatchMeta meta) {
-            response.body_.write(
+            response.body.write(
                 "URI:\t" ~ request.uri ~ "\n" ~
                 "Value:\t" ~ meta.placeholders[0].value
             );

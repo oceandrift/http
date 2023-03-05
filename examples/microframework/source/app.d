@@ -14,7 +14,7 @@ int main() @safe
         // GET /
         router.get("/", delegate(Request, Response response) {
             // respond with "Hello world :)"
-            response.body_.write("Hello world :)");
+            response.body.write("Hello world :)");
             return response;
         });
 
@@ -27,8 +27,8 @@ int main() @safe
             hstring itemFromURI = meta.placeholders.get("item-name");
 
             // Respond echo'ing the item name
-            response.body_.write("Viewing item: ");
-            response.body_.write(itemFromURI);
+            response.body.write("Viewing item: ");
+            response.body.write(itemFromURI);
 
             return response.withHeader!"Content-Type"("text/plain");
         });
@@ -37,20 +37,20 @@ int main() @safe
         // GET /uri-info?foo=bar
         router.get("/uri-info", delegate(Request request, Response response) {
             // raw request URI
-            response.body_.write("URI:\n\t");
-            response.body_.write(request.uri);
+            response.body.write("URI:\n\t");
+            response.body.write(request.uri);
 
             // request URI decoded
-            response.body_.write("\nURI Decoded:\n\t");
-            response.body_.write(urlDecode(request.uri).toHString);
+            response.body.write("\nURI Decoded:\n\t");
+            response.body.write(urlDecode(request.uri).toHString);
 
             // path string of request URI (“the string before the '?'”)
-            response.body_.write("\nPath:\n\t");
-            response.body_.write(request.uri.path);
+            response.body.write("\nPath:\n\t");
+            response.body.write(request.uri.path);
 
             // query string of request URI (“the string after the '?'”)
-            response.body_.write("\nQuery:\n\t");
-            response.body_.write(request.uri.query);
+            response.body.write("\nQuery:\n\t");
+            response.body.write(request.uri.query);
 
             // return response with “content-type” + “server” headers
             return response
@@ -62,7 +62,7 @@ int main() @safe
         // GET /form?message=Hi
         router.get("/form", delegate(Request request, Response response) {
             // Print HTML page
-            response.body_.write(
+            response.body.write(
                 `<!DOCTYPE html><html><body><h1>oceandrift/http</h1><p>Microframework example</p>`
             );
 
@@ -73,16 +73,16 @@ int main() @safe
                 // always escape user input!
                 hstring messageEscaped = htmlEscape(urlDecode(message)).toHString;
 
-                response.body_.write(`
+                response.body.write(`
                     <section style="border:2px solid #000;background:#0FF;padding:1rem;margin:1rem 0">
                         <h2>User Message (via Query Parameter)</h2>
                         <pre style="color:#C00">`
                 );
-                response.body_.write(messageEscaped);
-                response.body_.write(`</pre></section>`);
+                response.body.write(messageEscaped);
+                response.body.write(`</pre></section>`);
             }
 
-            response.body_.write(`
+            response.body.write(`
                 <form method="GET" action="/form">
                     <label>
                         Message:
@@ -120,11 +120,11 @@ int main() @safe
             if (message.length == 0)
             {
                 // no or empty “message” parameter
-                response.body_.write("Bad request, no or empty 'message' parameter");
+                response.body.write("Bad request, no or empty 'message' parameter");
                 return response.withStatus(400);
             }
 
-            response.body_.write(
+            response.body.write(
                 `<!DOCTYPE html><html><body><h1>oceandrift/http</h1>
                 <p>Microframework POST request example</p>
                     <h2>User Message (via Form Data)</h2>
@@ -132,9 +132,9 @@ int main() @safe
             );
 
             // always escape user input!
-            response.body_.write(htmlEscape(message).toHString);
+            response.body.write(htmlEscape(message).toHString);
 
-            response.body_.write(`</pre></body></html>`);
+            response.body.write(`</pre></body></html>`);
 
             return response;
         });
@@ -159,7 +159,7 @@ int main() @safe
             response.setHeader!"Content-Type"("text/html; charset=UTF-8");
 
             // write HTML
-            response.body_.write(
+            response.body.write(
                 `<!DOCTYPE html><html><body><h1>oceandrift/http</h1>
                 <p>Microframework 'input validation' example</p>
                     <h2>Input Form</h2>
@@ -181,7 +181,7 @@ int main() @safe
             if (queryParams.length == 0)
             {
                 // no query params, so no need to validate anything
-                response.body_.write(`</body></html>`);
+                response.body.write(`</body></html>`);
                 return response;
             }
 
@@ -191,24 +191,24 @@ int main() @safe
             {
                 // validation failed
                 // print a pretty error message
-                response.body_.write(`<h2 style="color: #F00">Validation failed</h2><p>Bad request</p><ul>`);
+                response.body.write(`<h2 style="color: #F00">Validation failed</h2><p>Bad request</p><ul>`);
                 foreach (e; validationResult.errors)
-                    response.body_.write(`<li>` ~ e.field ~ ": " ~ e.message ~ `</li>`);
+                    response.body.write(`<li>` ~ e.field ~ ": " ~ e.message ~ `</li>`);
                     // idup should be unnecessary once those are fixed:
                     // - https://issues.dlang.org/show_bug.cgi?id=23682
                     // - https://issues.dlang.org/show_bug.cgi?id=22916
-                response.body_.write(`</ul>`);
+                response.body.write(`</ul>`);
 
                 return response.withStatus(400);
             }
 
             MyData validData = validationResult.data;
 
-            response.body_.write(`<h2>Validated User Message</h2><pre style="background:#EEE">`);
-            response.body_.write(htmlEscape(validData.message).toHString); // always escape non-HTML data
-            response.body_.write(`</pre><h2>Validated Number</h2><pre style="background:#EEE">`);
-            response.body_.write(htmlEscape(validData.number.to!string).toHString);
-            response.body_.write(`</pre></body></html>`);
+            response.body.write(`<h2>Validated User Message</h2><pre style="background:#EEE">`);
+            response.body.write(htmlEscape(validData.message).toHString); // always escape non-HTML data
+            response.body.write(`</pre><h2>Validated Number</h2><pre style="background:#EEE">`);
+            response.body.write(htmlEscape(validData.number.to!string).toHString);
+            response.body.write(`</pre></body></html>`);
 
             return response;
         });
@@ -216,19 +216,19 @@ int main() @safe
         // GET /middleware
         router.get("/middleware",  delegate(Request request, Response response) {
             // regular request handler
-            response.body_.write("Main Request Handler\n");
+            response.body.write("Main Request Handler\n");
             return response;
         }).add(delegate(Request request, Response response, MiddlewareNext next, RouteMatchMeta meta) {
             // middleware 1
-            response.body_.write("before 1\n");
+            response.body.write("before 1\n");
             response = next(request, response);
-            response.body_.write("after 1\n");
+            response.body.write("after 1\n");
             return response;
         }).add(delegate(Request request, Response response, MiddlewareNext next, RouteMatchMeta meta) {
             // middleware 2
-            response.body_.write("before 2\n");
+            response.body.write("before 2\n");
             response = next(request, response);
-            response.body_.write("after 2\n");
+            response.body.write("after 2\n");
             return response;
         });
 
@@ -240,20 +240,20 @@ int main() @safe
             // no value set?
             if (cookieValue is null)
             {
-                response.body_.write("ExampleCookie was not set previously.");
+                response.body.write("ExampleCookie was not set previously.");
 
                 // set cookie
                 response.setCookie(Cookie("ExampleCookie", "1234"));
                 return response;
             }
 
-            response.body_.write("ExampleCookie value: " ~ cookieValue);
+            response.body.write("ExampleCookie value: " ~ cookieValue);
             return response;
         }).add(cookiesMiddleware);
 
         // Not Found (HTTP Status 404)
         router.notFoundHandler = delegate(Request request, Response response) {
-            response.body_.write("Not Found :(");
+            response.body.write("Not Found :(");
             return response;
         };
     });

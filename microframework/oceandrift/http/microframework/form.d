@@ -33,11 +33,11 @@ KeyValuePair[] formData(Request request)
 
     // form urlencoded?
     if (contentType[0] == contentTypeURLEncoded)
-        return parseFormDataURLEncoded(request.body_.toArray());
+        return parseFormDataURLEncoded(request.body.toArray());
 
     // multipart form?
     if (contentType[0].startsWith(contentTypeMultipart))
-        return parseFormDataMultipart(contentType[0], request.body_);
+        return parseFormDataMultipart(contentType[0], request.body);
 
     return null;
 }
@@ -55,13 +55,13 @@ bool tryGetFormData(Request request, out KeyValuePair[] formData)
     // form urlencoded?
     if (contentType[0] == contentTypeURLEncoded)
     {
-        formData = parseFormDataURLEncoded(request.body_.toArray());
+        formData = parseFormDataURLEncoded(request.body.toArray());
         return true;
     }
 
     if (contentType[0][0 .. contentTypeMultipart.length] == contentTypeMultipart)
     {
-        formData = parseFormDataMultipart(contentType[0], request.body_);
+        formData = parseFormDataMultipart(contentType[0], request.body);
         return true;
     }
 
