@@ -236,33 +236,39 @@ final class Router
      +/
     Response handleRequest(Request request, Response response)
     {
+        return this.handleRequest(request.uri.path, request, response);
+    }
+
+    ///
+    Response handleRequest(hstring uri, Request request, Response response)
+    {
         if (request.method.length < 3)
             return this.handle404(request, response);
 
         if (request.method == "GET")
         {
-            return this.matchURL(_routes.get, request.uri, request, response);
+            return this.matchURL(_routes.get, uri, request, response);
         }
         else if (request.method[0] == 'P')
         {
             if (request.method[1 .. $] == "OST")
-                return this.matchURL(_routes.post, request.uri, request, response);
+                return this.matchURL(_routes.post, uri, request, response);
             if (request.method[1 .. $] == "UT")
-                return this.matchURL(_routes.put, request.uri, request, response);
+                return this.matchURL(_routes.put, uri, request, response);
             if (request.method[1 .. $] == "ATCH")
-                return this.matchURL(_routes.patch, request.uri, request, response);
+                return this.matchURL(_routes.patch, uri, request, response);
         }
         else if (request.method == "OPTIONS")
         {
-            return handleOptionsRequest(request, response);
+            return handleOptionsRequest(uri, request, response);
         }
         else if (request.method == "HEAD")
         {
-            return this.handleHeadRequest(request, response);
+            return this.handleHeadRequest(uri, request, response);
         }
 
         // unknown method
-        return this.handleUnknown(request, response);
+        return this.handleUnknown(uri, request, response);
     }
 
     /++
@@ -403,13 +409,11 @@ private:
 
     Response matchURL(RouteTreeNode!RoutedRequestHandler* root, hstring url, Request request, Response response)
     {
-        url = url.path;
-
         RouteMatchResult!RoutedRequestHandler r = root.match(url);
 
         // not found or method not allowed?
         if (r.requestHandler is null)
-            return this.handleUnknown(request, response);
+            return this.handleUnknown(url, request, response);
 
         // match
         return r.requestHandler(request, response, r.meta);
@@ -440,9 +444,9 @@ private:
         return response;
     }
 
-    Response handleHeadRequest(Request request, Response response)
+    Response handleHeadRequest(hstring uri, Request request, Response response)
     {
-        response = this.matchURL(_routes.get, request.uri, request, response);
+        response = this.matchURL(_routes.get, uri, request, response);
 
         // has body?
         if (response.body !is null)
@@ -461,10 +465,10 @@ private:
         return response;
     }
 
-    Response handleOptionsRequest(Request request, Response response)
+    Response handleOptionsRequest(hstring uri, Request request, Response response)
     {
         // determine route
-        RouteMatchResult!OptionsRequestMethods match = _routes.options.match(request.uri.path);
+        RouteMatchResult!OptionsRequestMethods match = _routes.options.match(uri);
 
         // not found?
         if (match.requestHandler is null)
@@ -481,9 +485,9 @@ private:
         return response;
     }
 
-    Response handleUnknown(Request request, Response response)
+    Response handleUnknown(hstring uri, Request request, Response response)
     {
-        RouteMatchResult!OptionsRequestMethods r405 = this._routes.options.match(request.uri.path);
+        RouteMatchResult!OptionsRequestMethods r405 = this._routes.options.match(uri);
 
         // error 405?
         if (r405.requestHandler !is null)

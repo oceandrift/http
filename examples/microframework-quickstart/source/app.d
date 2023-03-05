@@ -29,7 +29,8 @@ int main(string[] args) @safe
         // e.g.
         //  GET /anything
         //  GET /something-else
-        router.get("/:var", delegate(Request request, Response response, RouteMatchMeta meta) {
+        //  GET /something/else
+        router.get("/*", delegate(Request request, Response response, RouteMatchMeta meta) {
             response.body.write(
                 "URI:\t" ~ request.uri ~ "\n" ~
                 "Value:\t" ~ meta.placeholders[0].value

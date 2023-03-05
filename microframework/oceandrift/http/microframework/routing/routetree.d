@@ -25,6 +25,10 @@
     $(TIP
         Route placeholders are called $(B wildcards) internally.
     )
+
+    Alternatively, also supports $(B deep wildcards).
+    They are written as asterisk (`*`) and capture everything to the end of the URL.
+    These can only exist at the end of a route and cannot overlap with regular $(I route placeholders).
  +/
 module oceandrift.http.microframework.routing.routetree;
 
@@ -47,13 +51,19 @@ struct RouteTreeLink(TLeaf)
     RouteTreeNode!TLeaf* node;
 }
 
+struct RouteWildcard(TLeaf)
+{
+    bool deep = false;
+    RouteTreeLink!TLeaf link;
+}
+
 ///
 struct RouteTreeNode(TLeaf = RoutedRequestHandler)
 {
     TLeaf requestHandler;
 
     RouteTreeLink!(TLeaf)[] branches;
-    RouteTreeLink!TLeaf wildcard;
+    RouteWildcard!TLeaf wildcard;
 }
 
 ///
@@ -74,26 +84,38 @@ private void addRouteTreeNode(TLeaf)(RouteTreeNode!TLeaf* tree, string url, TLea
         return;
     }
 
-    // wildcard
+    // deep wildcard?
+    if (url[0] == '*')
+    {
+        assert(url.length == 1, "Deep wildcard must be at the end of a route");
+        assert(tree.wildcard.link.node is null, "Cannot insert deep wildcard where already is a route placeholders");
+
+        tree.wildcard.deep = true;
+        tree.wildcard.link.component = "*";
+        tree.wildcard.link.node = new RouteTreeNode!TLeaf(requestHandler);
+        return;
+    }
+
+    // placeholder?
     if (url[0] == ':')
     {
         url = url[1 .. $];
 
         immutable ptrdiff_t endOfWildcard = url.indexOf('/');
 
-        if (tree.wildcard.node is null) // insert
+        if (tree.wildcard.link.node is null) // insert
         {
-            tree.wildcard.node = new RouteTreeNode!TLeaf();
+            tree.wildcard.link.node = new RouteTreeNode!TLeaf();
 
             if (endOfWildcard < 0) // end of url reached
             {
-                tree.wildcard.component = url[0 .. $];
-                tree.wildcard.node.requestHandler = requestHandler;
+                tree.wildcard.link.component = url[0 .. $];
+                tree.wildcard.link.node.requestHandler = requestHandler;
                 return;
             }
 
-            tree.wildcard.component = url[0 .. endOfWildcard];
-            return addRouteTreeNode(tree.wildcard.node, url[endOfWildcard .. $], requestHandler);
+            tree.wildcard.link.component = url[0 .. endOfWildcard];
+            return addRouteTreeNode(tree.wildcard.link.node, url[endOfWildcard .. $], requestHandler);
         }
 
         // exists (no direct insert)
@@ -111,20 +133,23 @@ private void addRouteTreeNode(TLeaf)(RouteTreeNode!TLeaf* tree, string url, TLea
             url = url[endOfWildcard .. $];
         }
 
+        assert(!tree.wildcard.deep, "Cannot insert a route placeholder where already is a deep wildcard");
+
         // dfmt off
         assert(
-            (component == tree.wildcard.component)
-            || (component == "")
-            || (tree.wildcard.component == "")
-            ,
+            (
+                (component == tree.wildcard.link.component)
+                || (component == "")
+                || (tree.wildcard.link.component == "")
+            ),
             "Ambiguously named route placeholder: `"
                 ~ component
-                ~ "` (already knowns as: `" ~ tree.wildcard.component ~ "`)"
+                ~ "` (already knowns as: `" ~ tree.wildcard.link.component ~ "`)"
         );
         // dfmt on
 
-        tree.wildcard.component = component;
-        return addRouteTreeNode(tree.wildcard.node, url, requestHandler);
+        tree.wildcard.link.component = component;
+        return addRouteTreeNode(tree.wildcard.link.node, url, requestHandler);
     }
 
     foreach (ref branch; tree.branches)
@@ -190,16 +215,20 @@ private void addRouteTreeNode(TLeaf)(RouteTreeNode!TLeaf* tree, string url, TLea
 
     // insert
 
-    immutable nextWildcard = url.indexOf(':');
-    if (nextWildcard < 0) // no wildcard left, simple insert
+    ptrdiff_t nextWildcard = url.indexOf(':');
+    if (nextWildcard < 0)
+        nextWildcard = url.indexOf('*');
+
+    if (nextWildcard >= 0)
     {
-        tree.branches ~= RouteTreeLink!TLeaf(url, new RouteTreeNode!TLeaf(requestHandler));
+        auto beforeWildcard = new RouteTreeNode!TLeaf();
+        addRouteTreeNode(beforeWildcard, url[nextWildcard .. $], requestHandler);
+        tree.branches ~= RouteTreeLink!TLeaf(url[0 .. nextWildcard], beforeWildcard);
         return;
     }
 
-    auto beforeWildcard = new RouteTreeNode!TLeaf();
-    addRouteTreeNode(beforeWildcard, url[nextWildcard .. $], requestHandler);
-    tree.branches ~= RouteTreeLink!TLeaf(url[0 .. nextWildcard], beforeWildcard);
+    // no wildcard left, simple insert
+    tree.branches ~= RouteTreeLink!TLeaf(url, new RouteTreeNode!TLeaf(requestHandler));
     return;
 }
 
@@ -218,29 +247,29 @@ unittest
 
     routerRoot.addRoute("/hello", rh0);
     assert(routerRoot.requestHandler is null);
-    assert(routerRoot.wildcard.node is null);
+    assert(routerRoot.wildcard.link.node is null);
     assert(routerRoot.branches.length == 1);
     assert(routerRoot.branches[0].component == "hello");
     assert(routerRoot.branches[0].node.requestHandler == rh0);
     assert(routerRoot.branches[0].node.branches.length == 0);
-    assert(routerRoot.branches[0].node.wildcard.node is null);
+    assert(routerRoot.branches[0].node.wildcard.link.node is null);
 
     routerRoot.addRoute("/world", rh1);
     assert(routerRoot.requestHandler is null);
-    assert(routerRoot.wildcard.node is null);
+    assert(routerRoot.wildcard.link.node is null);
     assert(routerRoot.branches.length == 2);
     assert(routerRoot.branches[0].component == "hello");
     assert(routerRoot.branches[0].node.requestHandler == rh0);
     assert(routerRoot.branches[0].node.branches.length == 0);
-    assert(routerRoot.branches[0].node.wildcard.node is null);
+    assert(routerRoot.branches[0].node.wildcard.link.node is null);
     assert(routerRoot.branches[1].component == "world");
     assert(routerRoot.branches[1].node.requestHandler == rh1);
     assert(routerRoot.branches[1].node.branches.length == 0);
-    assert(routerRoot.branches[1].node.wildcard.node is null);
+    assert(routerRoot.branches[1].node.wildcard.link.node is null);
 
     routerRoot.addRoute("/hello-world", rh2);
     assert(routerRoot.requestHandler is null);
-    assert(routerRoot.wildcard.node is null);
+    assert(routerRoot.wildcard.link.node is null);
     assert(routerRoot.branches.length == 2);
     assert(routerRoot.branches[0].component == "hello");
     assert(routerRoot.branches[0].node.requestHandler == rh0);
@@ -248,11 +277,11 @@ unittest
     assert(routerRoot.branches[0].node.branches[0].component == "-world");
     assert(routerRoot.branches[0].node.branches[0].node.requestHandler == rh2);
     assert(routerRoot.branches[0].node.branches[0].node.branches.length == 0);
-    assert(routerRoot.branches[0].node.branches[0].node.wildcard.node is null);
+    assert(routerRoot.branches[0].node.branches[0].node.wildcard.link.node is null);
 
     routerRoot.addRoute("/hello_there", rh1);
     assert(routerRoot.requestHandler is null);
-    assert(routerRoot.wildcard.node is null);
+    assert(routerRoot.wildcard.link.node is null);
     assert(routerRoot.branches.length == 2);
     assert(routerRoot.branches[0].component == "hello");
     assert(routerRoot.branches[0].node.requestHandler == rh0);
@@ -260,11 +289,11 @@ unittest
     assert(routerRoot.branches[0].node.branches[0].component == "-world");
     assert(routerRoot.branches[0].node.branches[0].node.requestHandler == rh2);
     assert(routerRoot.branches[0].node.branches[0].node.branches.length == 0);
-    assert(routerRoot.branches[0].node.branches[0].node.wildcard.node is null);
+    assert(routerRoot.branches[0].node.branches[0].node.wildcard.link.node is null);
     assert(routerRoot.branches[0].node.branches[1].component == "_there");
     assert(routerRoot.branches[0].node.branches[1].node.requestHandler == rh1);
     assert(routerRoot.branches[0].node.branches[1].node.branches.length == 0);
-    assert(routerRoot.branches[0].node.branches[1].node.wildcard.node is null);
+    assert(routerRoot.branches[0].node.branches[1].node.wildcard.link.node is null);
 
     routerRoot.addRoute("/hello_you", rh3);
     assert(routerRoot.branches[0].component == "hello");
@@ -272,7 +301,7 @@ unittest
     assert(routerRoot.branches[0].node.branches.length == 2);
     assert(routerRoot.branches[0].node.branches[1].component == "_");
     assert(routerRoot.branches[0].node.branches[1].node.requestHandler is null);
-    assert(routerRoot.branches[0].node.branches[1].node.wildcard.node is null);
+    assert(routerRoot.branches[0].node.branches[1].node.wildcard.link.node is null);
     assert(routerRoot.branches[0].node.branches[1].node.branches.length == 2);
     assert(routerRoot.branches[0].node.branches[1].node.branches[0].component == "there");
     assert(routerRoot.branches[0].node.branches[1].node.branches[0].node.requestHandler == rh1);
@@ -282,65 +311,71 @@ unittest
     routerRoot.addRoute("/world/:no", rh3);
     assert(routerRoot.branches.length == 2);
     assert(routerRoot.branches[1].node.branches.length == 1);
-    assert(routerRoot.branches[1].node.wildcard.node is null);
+    assert(routerRoot.branches[1].node.wildcard.link.node is null);
     assert(routerRoot.branches[1].node.branches[0].component == "/");
     assert(routerRoot.branches[1].node.branches[0].node.requestHandler is null);
     assert(routerRoot.branches[1].node.branches[0].node.branches.length == 0);
-    assert(routerRoot.branches[1].node.branches[0].node.wildcard.component == "no");
-    assert(routerRoot.branches[1].node.branches[0].node.wildcard.node.wildcard.node is null);
-    assert(routerRoot.branches[1].node.branches[0].node.wildcard.node.branches.length == 0);
-    assert(routerRoot.branches[1].node.branches[0].node.wildcard.node.requestHandler == rh3);
+    assert(routerRoot.branches[1].node.branches[0].node.wildcard.link.component == "no");
+    assert(routerRoot.branches[1].node.branches[0].node.wildcard.link.node.wildcard.link.node is null);
+    assert(routerRoot.branches[1].node.branches[0].node.wildcard.link.node.branches.length == 0);
+    assert(routerRoot.branches[1].node.branches[0].node.wildcard.link.node.requestHandler == rh3);
 
     routerRoot.addRoute("/world/:no/asdf", rh2);
-    assert(routerRoot.branches[1].node.branches[0].node.wildcard.component == "no");
+    assert(routerRoot.branches[1].node.branches[0].node.wildcard.link.component == "no");
     assert(routerRoot.branches[1].node.branches[0].node.branches.length == 0);
-    assert(routerRoot.branches[1].node.branches[0].node.wildcard.node.wildcard.node is null);
-    assert(routerRoot.branches[1].node.branches[0].node.wildcard.node.branches.length == 1);
+    assert(routerRoot.branches[1].node.branches[0].node.wildcard.link.node.wildcard.link.node is null);
+    assert(routerRoot.branches[1].node.branches[0].node.wildcard.link.node.branches.length == 1);
     assert(
-        routerRoot.branches[1].node.branches[0].node.wildcard.node.branches[0].component == "/asdf"
+        routerRoot.branches[1].node.branches[0].node.wildcard.link.node.branches[0].component == "/asdf"
     );
     assert(
-        routerRoot.branches[1].node.branches[0].node.wildcard.node.branches[0]
+        routerRoot.branches[1].node.branches[0].node.wildcard.link.node
+            .branches[0]
             .node.requestHandler == rh2
     );
 
     routerRoot.addRoute("/world/:no/", rh1);
     assert(routerRoot.branches.length == 2);
     assert(routerRoot.branches[1].node.branches.length == 1);
-    assert(routerRoot.branches[1].node.branches[0].node.wildcard.node.branches.length == 1);
-    assert(routerRoot.branches[1].node.branches[0].node.wildcard.node.branches[0].component == "/");
+    assert(routerRoot.branches[1].node.branches[0].node.wildcard.link.node.branches.length == 1);
     assert(
-        routerRoot.branches[1].node.branches[0].node.wildcard.node.branches[0]
+        routerRoot.branches[1].node.branches[0].node.wildcard.link.node.branches[0].component == "/");
+    assert(
+        routerRoot.branches[1].node.branches[0].node.wildcard.link.node
+            .branches[0]
             .node.branches.length == 1
     );
-    assert(routerRoot.branches[1].node.branches[0].node.wildcard.node
+    assert(
+        routerRoot.branches[1].node.branches[0].node.wildcard.link.node
             .branches[0].node.branches[0].component == "asdf"
     );
-    assert(routerRoot.branches[1].node.branches[0].node.wildcard.node
+    assert(
+        routerRoot.branches[1].node.branches[0].node.wildcard.link.node
             .branches[0].node.branches[0].node.requestHandler == rh2
     );
     assert(
-        routerRoot.branches[1].node.branches[0].node.wildcard.node
+        routerRoot.branches[1].node.branches[0].node.wildcard.link.node
             .branches[0].node.requestHandler == rh1
     );
     assert(
-        routerRoot.branches[1].node.branches[0].node.wildcard.node
-            .branches[0].node.wildcard.node is null
+        routerRoot.branches[1].node.branches[0].node.wildcard.link.node
+            .branches[0].node.wildcard.link.node is null
     );
 
     routerRoot.addRoute("/foo/:var/", rh2);
     assert(routerRoot.branches[2].component == "foo/");
     assert(routerRoot.branches[2].node.requestHandler is null);
-    assert(routerRoot.branches[2].node.wildcard.component == "var");
-    assert(routerRoot.branches[2].node.wildcard.node !is null);
-    assert(routerRoot.branches[2].node.wildcard.node.requestHandler is null);
-    assert(routerRoot.branches[2].node.wildcard.node.branches.length == 1);
-    assert(routerRoot.branches[2].node.wildcard.node.branches[0].component == "/");
-    assert(routerRoot.branches[2].node.wildcard.node.branches[0].node.requestHandler == rh2);
+    assert(routerRoot.branches[2].node.wildcard.deep == false);
+    assert(routerRoot.branches[2].node.wildcard.link.component == "var");
+    assert(routerRoot.branches[2].node.wildcard.link.node !is null);
+    assert(routerRoot.branches[2].node.wildcard.link.node.requestHandler is null);
+    assert(routerRoot.branches[2].node.wildcard.link.node.branches.length == 1);
+    assert(routerRoot.branches[2].node.wildcard.link.node.branches[0].component == "/");
+    assert(routerRoot.branches[2].node.wildcard.link.node.branches[0].node.requestHandler == rh2);
 
     routerRoot.addRoute("/foo/:var", rh0);
-    assert(routerRoot.branches[2].node.wildcard.node.branches[0].node.requestHandler == rh2);
-    assert(routerRoot.branches[2].node.wildcard.node.requestHandler == rh0);
+    assert(routerRoot.branches[2].node.wildcard.link.node.branches[0].node.requestHandler == rh2);
+    assert(routerRoot.branches[2].node.wildcard.link.node.requestHandler == rh0);
 
     routerRoot.addRoute("/abc", rh0);
     assert(routerRoot.branches[3].component == "abc");
@@ -386,20 +421,32 @@ unittest
     );
 
     routerRoot.addRoute("/:1/:2", rh0);
-    assert(routerRoot.wildcard.node !is null);
-    assert(routerRoot.wildcard.component == "1");
-    assert(routerRoot.wildcard.node.branches[0].component == "/");
-    assert(routerRoot.wildcard.node.branches[0].node.wildcard.node !is null);
-    assert(routerRoot.wildcard.node.branches[0].node.wildcard.component == "2");
-    assert(routerRoot.wildcard.node.branches[0].node.wildcard.node.requestHandler == rh0);
+    assert(routerRoot.wildcard.link.node !is null);
+    assert(routerRoot.wildcard.link.component == "1");
+    assert(routerRoot.wildcard.link.node.branches[0].component == "/");
+    assert(routerRoot.wildcard.link.node.branches[0].node.wildcard.link.node !is null);
+    assert(routerRoot.wildcard.link.node.branches[0].node.wildcard.link.component == "2");
+    assert(routerRoot.wildcard.link.node.branches[0].node.wildcard.link.node.requestHandler == rh0);
     routerRoot.addRoute("/:1/:2/gulaschsuppm", rh1);
     assert(
-        routerRoot.wildcard.node.branches[0].node.wildcard.node.branches[0].component == "/gulaschsuppm"
+        routerRoot.wildcard.link.node.branches[0].node.wildcard.link.node
+            .branches[0].component == "/gulaschsuppm"
     );
     assert(
-        routerRoot.wildcard.node.branches[0].node.wildcard.node.branches[0]
+        routerRoot.wildcard.link.node.branches[0].node.wildcard.link.node
+            .branches[0]
             .node.requestHandler == rh1
     );
+
+    routerRoot.addRoute("/deep/*", rh3);
+    assert(routerRoot.branches[4].node !is null);
+    assert(routerRoot.branches[4].component == "deep/", routerRoot.branches[4].component);
+    assert(routerRoot.branches[4].node.wildcard.link.node !is null);
+    assert(routerRoot.branches[4].node.wildcard.deep == true);
+    assert(routerRoot.branches[4].node.wildcard.link.component == "*");
+    assert(routerRoot.branches[4].node.wildcard.link.node.requestHandler == rh3);
+    assert(routerRoot.branches[4].node.wildcard.link.node.wildcard.link.node is null);
+    assert(routerRoot.branches[4].node.wildcard.link.node.branches.length == 0);
 }
 
 @system unittest
@@ -450,7 +497,20 @@ private TLeaf matchRoute(TLeaf)(RouteTreeNode!TLeaf* tree, hstring url, ref Rout
 {
     // direct match?
     if (url.length == 0)
+    {
+        // no direct request handler?
+        if (tree.requestHandler is null)
+        {
+            // maybe a deep wildcard?
+            if ((tree.wildcard.link.node !is null) && tree.wildcard.deep)
+            {
+                routeMatchMeta.placeholders ~= KeyValuePair(tree.wildcard.link.component, url);
+                return tree.wildcard.link.node.requestHandler;
+            }
+        }
+
         return tree.requestHandler;
+    }
 
     // matching branches?
     foreach (branch; tree.branches)
@@ -465,15 +525,24 @@ private TLeaf matchRoute(TLeaf)(RouteTreeNode!TLeaf* tree, hstring url, ref Rout
     }
 
     // wildcard match?
-    if (tree.wildcard.node !is null)
+    if (tree.wildcard.link.node !is null)
     {
-        ptrdiff_t endOfWildcard = url.indexOf('/');
+        ptrdiff_t endOfWildcard;
 
-        if (endOfWildcard < 0)
+        if (tree.wildcard.deep)
+        {
             endOfWildcard = url.length;
+        }
+        else
+        {
+            endOfWildcard = url.indexOf('/');
 
-        routeMatchMeta.placeholders ~= KeyValuePair(tree.wildcard.component, url[0 .. endOfWildcard]);
-        return matchRoute(tree.wildcard.node, url[endOfWildcard .. $], routeMatchMeta);
+            if (endOfWildcard < 0)
+                endOfWildcard = url.length;
+        }
+
+        routeMatchMeta.placeholders ~= KeyValuePair(tree.wildcard.link.component, url[0 .. endOfWildcard]);
+        return matchRoute(tree.wildcard.link.node, url[endOfWildcard .. $], routeMatchMeta);
     }
 
     // no match
@@ -495,6 +564,7 @@ unittest
     RoutedRequestHandler rhItemNOwner = delegate(Request, Response r, RouteMatchMeta) { return r; };
     RoutedRequestHandler rhItemNOwnerPetN = delegate(Request, Response r, RouteMatchMeta) { return r; };
     RoutedRequestHandler rhVisitors = delegate(Request, Response r, RouteMatchMeta) { return r; };
+    RoutedRequestHandler rhHelloDeepWildcard = delegate(Request, Response r, RouteMatchMeta) { return r; };
     // dfmt on
 
     auto routerRoot = new RouteTreeNode!RoutedRequestHandler(rhRoot);
@@ -508,6 +578,7 @@ unittest
     routerRoot.addRoute("/items/:id/owner", rhItemNOwner);
     routerRoot.addRoute("/items/:id/owner/pets/:petID", rhItemNOwnerPetN);
     routerRoot.addRoute("/events/:year/:month/:day/:event-name/visitors", rhVisitors);
+    routerRoot.addRoute("/hello/deep/*", rhHelloDeepWildcard);
 
     assert(routerRoot.match("/hello/world").requestHandler == rhHelloWorld);
     assert(routerRoot.match("/hello/world").requestHandler != rhHello);
@@ -529,16 +600,28 @@ unittest
     assert(routerRoot.match("/items/xyz/owner/pets/").requestHandler is null);
     assert(routerRoot.match("/items/xyz/owner/pets/1").requestHandler == rhItemNOwnerPetN);
     assert(
-        routerRoot.match("/events/:year/:month/:day/:event-name/visitors")
-            .requestHandler == rhVisitors);
+        routerRoot.match("/events/1990/01/01/foobar/visitors")
+            .requestHandler == rhVisitors
+    );
+    assert(
+        routerRoot.match("/hello/deep/").requestHandler == rhHelloDeepWildcard
+    );
+    assert(
+        routerRoot.match("/hello/deep/oachkatzlschwoaf").requestHandler == rhHelloDeepWildcard
+    );
+    assert(
+        routerRoot.match("/hello/deep/oachkatzl/schwoaf").requestHandler == rhHelloDeepWildcard
+    );
 
     assert(routerRoot.match("/").requestHandler == rhRoot);
     assert(routerRoot.match("oachkatzlschwoaf").requestHandler is null);
 
     assert(routerRoot.match("/items/0001").meta.placeholders
-            == [KeyValuePair("id", "0001")]);
+            == [KeyValuePair("id", "0001")]
+    );
     assert(routerRoot.match("/items/0002").meta.placeholders
-            == [KeyValuePair("id", "0002")]);
+            == [KeyValuePair("id", "0002")]
+    );
     assert(routerRoot.match("/items/thingy/owner/pets/1")
             .meta.placeholders == [
                 KeyValuePair("id", "thingy"),
@@ -553,5 +636,13 @@ unittest
                 KeyValuePair("day", "31"),
                 KeyValuePair("event-name", "New%20Year%E2%80%99s%20Eve"),
             ]
+    );
+    assert(
+        routerRoot.match("/hello/deep/oachkatzlschwoaf")
+            .meta.placeholders == [KeyValuePair("*", "oachkatzlschwoaf"),]
+    );
+    assert(
+        routerRoot.match("/hello/deep/oachkatzl/schwoaf")
+            .meta.placeholders == [KeyValuePair("*", "oachkatzl/schwoaf"),]
     );
 }

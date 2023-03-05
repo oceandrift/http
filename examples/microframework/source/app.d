@@ -26,11 +26,28 @@ int main() @safe
             // Access route parameter from route meta data
             hstring itemFromURI = meta.placeholders.get("item-name");
 
-            // Respond echo'ing the item name
-            response.body.write("Viewing item: ");
-            response.body.write(itemFromURI);
+            // Respond echoing the item name
+            response.body.write("Viewing item: " ~ itemFromURI);
 
             return response.withHeader!"Content-Type"("text/plain");
+        });
+
+        // GET /capture/<anything>
+        // GET /capture/
+        // GET /capture/foo
+        // GET /capture/foo/bar
+        router.get("/capture/*", delegate(Request request, Response response, RouteMatchMeta meta) {
+            // Access route parameter from route meta data
+            // There is only one for this route, so just access it by index
+            hstring capturedFromURI = meta.placeholders[0].value;
+
+            // Respond echoing the captured route component
+            response.body.write(`Captured value: "` ~ capturedFromURI ~ '"');
+
+            if (capturedFromURI == "ascii/art")
+                response.body.write("\n\n      *      `'-\n     / \\   .\n    /   \\ / \\\n#################\n");
+
+            return response.withHeader!"Content-Type"("text/plain; charset=US-ASCII");
         });
 
         // GET /uri-info
