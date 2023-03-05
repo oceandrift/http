@@ -143,7 +143,7 @@ final class FileReaderDataQ : DataQ
         return _file.rawRead(buffer).length;
     }
 
-    ptrdiff_t knownLength()
+    long knownLength()
     {
         immutable ulong fLength = _file.size;
         if (fLength == ulong.max)

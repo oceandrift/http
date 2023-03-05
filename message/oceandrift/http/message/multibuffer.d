@@ -645,9 +645,9 @@ final class InMemoryDataQ : DataQ
         return readBytes;
     }
 
-    ptrdiff_t knownLength() pure nothrow @nogc
+    long knownLength() pure nothrow @nogc
     {
-        ptrdiff_t sum = 0;
+        long sum = 0;
         foreach (b; _mb._bufferList[_readOffsetBuffer .. _mb.length])
             sum += b.length;
         return sum;

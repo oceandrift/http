@@ -194,7 +194,7 @@ void sendResponse(ref SocketConnection connection, Response response)
     }
 
     // no known body length?
-    immutable ptrdiff_t contentLength = response.body_.knownLength;
+    immutable long contentLength = response.body_.knownLength;
     if (contentLength < 0)
     {
         // no, send chunked
@@ -206,7 +206,7 @@ void sendResponse(ref SocketConnection connection, Response response)
     {
         // yes, send content-length
         connection.send("content-length: ");
-        connection.send(response.body_.knownLength.to!hstring);
+        connection.send(contentLength.to!hstring);
         connection.send(CRLFCRLF);
         sendResponseBodyAtOnce(connection, response.body_);
     }
