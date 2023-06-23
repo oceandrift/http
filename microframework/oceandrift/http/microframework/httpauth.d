@@ -8,8 +8,38 @@
 module oceandrift.http.microframework.httpauth;
 
 import oceandrift.http.message : hstring, Request, Response;
+import oceandrift.http.microframework.routing.middleware;
 import std.algorithm : canFind;
 import std.string : indexOf, startsWith;
+
+///
+alias CredentialsCheckFunction = bool delegate(Credentials) @safe;
+
+/++
+    Basic Auth Middleware
+
+    Handles basic auth for incoming requests.
+    Stops requests that have no or bad credentials from further processing.
+ +/
+MiddlewareRequestHandler basicAuthMiddleware(string realm)(CredentialsCheckFunction checkCredentials) @safe
+{
+    return delegate(Request request, Response response, MiddlewareNext next, RouteMatchMeta meta) {
+        BasicAuthCredentials baCred = request.basicAuthCredentials;
+
+        if (baCred.isUnauthorized)
+            return response.withBasicAuth!realm();
+
+        if (baCred.isBadRequest)
+            return response.withStatus(400);
+
+        assert(baCred.isOK);
+
+        if (!checkCredentials(baCred.credentials))
+            return response.withBasicAuth!realm();
+
+        return next(request, response);
+    };
+}
 
 @safe pure nothrow:
 

@@ -291,6 +291,13 @@ int main() @safe
             });
         });
 
+        router.get("/basic", delegate(Request request, Response response) {
+            response.body.write("Success");
+            return response;
+        }).add(basicAuthMiddleware!"Login"(delegate(Credentials credentials) {
+            return ((credentials.username == "user") && (credentials.password == "secret"));
+        }));
+
         // Not Found (HTTP Status 404)
         router.notFoundHandler = delegate(Request request, Response response) {
             response.body.write("Not Found :(");
