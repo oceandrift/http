@@ -222,6 +222,7 @@ final class Router
         Routes _routes;
         RequestHandler _404;
         MethodNotAllowedHandler _405;
+        Response delegate(Request, Response, OptionsRequestMethods) _405alt;
     }
 
     /++
@@ -504,14 +505,18 @@ private:
 
     Response handle405(Request request, Response response, OptionsRequestMethods options)
     {
-        return (*options).match!((OptionsRequestMethodsArray options) {
+        return (*options).match!((OptionsRequestMethodsArray optionsA) {
             // prepare default response
             response.statusCode = 405;
-            response.setHeader!"Allow" = options.methodsString;
+            response.setHeader!"Allow" = optionsA.methodsString;
 
             // custom handler?
             if (_405 !is null)
-                return _405(request, response, options.methods);
+                return _405(request, response, optionsA.methods);
+
+            // alternative custom handler?
+            if (_405alt !is null)
+                return _405alt(request, response, options);
 
             return response;
         }, (RoutedRequestHandler) { assert(false); return Response(); });
@@ -585,23 +590,11 @@ private:
     {
         // use parent router handlers by default
         // those can’t be assigned directly, because that wouldn’t reflect later updates of those handlers
-        router.notFoundHandler = &this.notFoundHandlerProxy;
-        router.methodNotAllowedHandler = &this.methodNotAllowedHandlerProxy;
+        router.notFoundHandler = &this.handle404;
+        router._405alt = &this.handle405;
 
         // call setup callback
         return callback(router);
-    }
-
-    // for child routers
-    Response notFoundHandlerProxy(Request request, Response response)
-    {
-        return _404(request, response);
-    }
-
-    // for child routers
-    Response methodNotAllowedHandlerProxy(Request request, Response response, string[] allow)
-    {
-        return _405(request, response, allow);
     }
 }
 
