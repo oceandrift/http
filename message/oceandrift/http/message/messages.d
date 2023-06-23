@@ -242,7 +242,7 @@ mixin template _Message(TMessage)
     }
 
     /// ditto
-    TMessage withProtocol(hstring protocol)
+    ref TMessage withProtocol(hstring protocol) return
     {
         this.protocol = protocol;
         return this;
@@ -338,28 +338,28 @@ mixin template _Message(TMessage)
     }
 
     /// ditto
-    TMessage withHeader(LowerCaseToken name, hstring value)
+    ref TMessage withHeader(LowerCaseToken name, hstring value) return
     {
         this.setHeader(name, value);
         return this;
     }
 
     /// ditto
-    TMessage withHeader(hstring name)(hstring value)
+    ref TMessage withHeader(hstring name)(hstring value)
     {
         enum token = LowerCaseToken.makeConverted(name);
         return this.withHeader(token, value);
     }
 
     /// ditto
-    TMessage withHeader(LowerCaseToken name, hstring[] values)
+    ref TMessage withHeader(LowerCaseToken name, hstring[] values) return
     {
         this.setHeader(name, values);
         return this;
     }
 
     /// ditto
-    TMessage withHeader(hstring name)(hstring[] values)
+    ref TMessage withHeader(hstring name)(hstring[] values) return
     {
         enum token = LowerCaseToken.makeConverted(name);
         return this.withHeader(token, values);
@@ -392,14 +392,14 @@ mixin template _Message(TMessage)
     }
 
     /// ditto
-    TMessage withAddedHeader(LowerCaseToken name, hstring value)
+    ref TMessage withAddedHeader(LowerCaseToken name, hstring value) return
     {
         this.addHeader(name, value);
         return this;
     }
 
     /// ditto
-    TMessage withAddedHeader(hstring name)(hstring value)
+    ref TMessage withAddedHeader(hstring name)(hstring value) return
     {
         enum token = LowerCaseToken.makeConverted(name);
         return this.withAddedHeader(token, value);
@@ -427,14 +427,14 @@ mixin template _Message(TMessage)
     }
 
     /// ditto
-    TMessage withoutHeader(LowerCaseToken name)
+    ref TMessage withoutHeader(LowerCaseToken name) return
     {
         this.unsetHeader(name);
         return this;
     }
 
     /// ditto
-    TMessage withoutHeader(hstring name)()
+    ref TMessage withoutHeader(hstring name)() return
     {
         enum token = LowerCaseToken.makeConverted(name);
         return this.withoutHeader(token);
@@ -457,7 +457,7 @@ mixin template _Message(TMessage)
     }
 
     /// ditto
-    TMessage withBody(DataQ body)
+    ref TMessage withBody(DataQ body) return
     {
         this.body = body;
         return this;
@@ -507,7 +507,7 @@ mixin template _Request(TRequest)
     }
 
     /// ditto
-    TRequest withMethod(hstring method)
+    ref TRequest withMethod(hstring method) return
     {
         this.method = method;
         return this;
@@ -537,7 +537,7 @@ mixin template _Request(TRequest)
     }
 
     /// ditto
-    TRequest withUri(hstring uri)
+    ref TRequest withUri(hstring uri) return
     {
         this.uri = uri;
         return this;
@@ -591,7 +591,7 @@ mixin template _Response(TResponse)
     }
 
     /// ditto
-    TResponse withStatus(int code, hstring reasonPhrase = null)
+    ref TResponse withStatus(int code, hstring reasonPhrase = null) return
     {
         this.setStatus(code, reasonPhrase);
         return this;
