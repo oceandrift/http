@@ -8,6 +8,7 @@ public import oceandrift.http.message : hbuffer, hstring, Request, Response;
 public import oceandrift.http.microframework.cookies;
 public import oceandrift.http.microframework.form;
 public import oceandrift.http.microframework.html;
+public import oceandrift.http.microframework.httpauth;
 public import oceandrift.http.microframework.kvp;
 public import oceandrift.http.microframework.routing.middleware;
 public import oceandrift.http.microframework.routing.router : Router, RoutedRequestHandler, RouteMatchMeta;
