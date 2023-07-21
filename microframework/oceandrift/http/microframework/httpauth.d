@@ -23,7 +23,7 @@ alias CredentialsCheckFunction = bool delegate(Credentials) @safe;
  +/
 MiddlewareRequestHandler basicAuthMiddleware(string realm)(CredentialsCheckFunction checkCredentials) @safe
 {
-    return delegate(Request request, Response response, MiddlewareNext next, RouteMatchMeta meta) {
+    return delegate(Request request, Response response, MiddlewareNext next, RouteMatchMeta meta) @safe {
         BasicAuthCredentials baCred = request.basicAuthCredentials;
 
         if (baCred.isUnauthorized)
@@ -37,8 +37,40 @@ MiddlewareRequestHandler basicAuthMiddleware(string realm)(CredentialsCheckFunct
         if (!checkCredentials(baCred.credentials))
             return response.withBasicAuth!realm();
 
+        function(ref Request request, hstring username) @trusted {
+            request.tags["auth-user"] = username;
+        }(request, baCred.credentials.username);
+
         return next(request, response);
     };
+}
+
+unittest
+{
+    auto mw = basicAuthMiddleware!"Dings"(delegate(Credentials cred) @safe {
+        return ((cred.username == "Oachkatzl") && (cred.password == "schwoaf"));
+    });
+
+    // auth success
+    auto r = Request();
+    r.setHeader!"Authorization"("Basic T2FjaGthdHpsOnNjaHdvYWY=");
+    bool hasBeenCalled = false;
+    mw(r, Response(), MiddlewareNext(null, delegate(Request request, Response response) @trusted {
+            hasBeenCalled = true;
+            assert(request.tags["auth-user"].get!hstring == "Oachkatzl");
+            return response;
+        }, null, RouteMatchMeta()), RouteMatchMeta());
+    assert(hasBeenCalled);
+
+    // auth fail
+    r = Request();
+    r.setHeader!"Authorization"("Basic U2Nod29hY2hrYXR6bDpvYWY=");
+    hasBeenCalled = false;
+    mw(r, Response(), MiddlewareNext(null, delegate(Request request, Response response) @trusted {
+            hasBeenCalled = true;
+            return response;
+        }, null, RouteMatchMeta()), RouteMatchMeta());
+    assert(!hasBeenCalled);
 }
 
 @safe pure nothrow:
