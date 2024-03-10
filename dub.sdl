@@ -28,7 +28,7 @@ subPackage {
     dflags "-preview=dip1000"
     dependency "httparsed" version="~>1.2"
     dependency "oceandrift-http:message" version="*"
-    dependency "socketplate" version="~>0.24.3"
+    dependency "socketplate" version="~>0.29"
 }
 
 dependency ":microframework" version="*"

@@ -86,7 +86,7 @@ in (configureRouter !is null)
 
     configureRouter(router);
 
-    return runSocketplateAppTCP(
+    return runSocketplateApp(
         appName,
         args,
         connectionHandler,
