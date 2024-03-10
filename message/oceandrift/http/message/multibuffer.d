@@ -156,7 +156,7 @@ struct MultiBuffer
      +/
     string toString() inout
     {
-        return cast(string) this.data();
+        return cast(string) this.toArray();
     }
 
     public @nogc // range
