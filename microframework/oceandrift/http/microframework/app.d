@@ -91,6 +91,12 @@ in (configureRouter !is null)
         args,
         connectionHandler,
         defaultListeningAddresses,
+        (address) => logListeningAddress(address),
         socketServerTunables,
     );
+}
+
+private void logListeningAddress(SocketAddress address) @safe
+{
+    logInfo("oceandrift/http: will listen on http://" ~ address.toString);
 }
