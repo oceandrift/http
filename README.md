@@ -1,3 +1,3 @@
 # oceandrift/http
 
-HTTP application server
+Microframework & HTTP application server
